@@ -212,7 +212,7 @@ fn missing_pieces<K: Ord + fmt::Debug + Copy>(
     // of requests - the consumer will handle this
     for requested in request {
         if !requests.contains(&requested) {
-            current_request.insert(dbg!(requested));
+            current_request.insert(requested);
         } else if !current_request.is_empty() {
             to_request.push(mem::take(&mut current_request));
         }

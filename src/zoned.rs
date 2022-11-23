@@ -146,20 +146,18 @@ mod tests {
     #[test]
     fn test_subdate() {
         fn subdate<const N: u32>(tz: chrono_tz::Tz) {
-            dbg!(N);
             let start = chrono::NaiveDate::from_ymd_opt(2022, 1, 1)
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
                 .unwrap()
                 .and_local_timezone(tz)
                 .unwrap();
-            dbg!(start);
+
             let periods = (0..((24 * 60 / N) * 365))
                 .map(|i| start + chrono::Duration::minutes((i * N).into()))
                 .collect::<Vec<_>>();
 
             for period in periods {
-                dbg!(period);
                 assert_eq!(
                     period,
                     Zoned::<Minutes<N>, _>::from_local(
@@ -199,13 +197,12 @@ mod tests {
                 .unwrap()
                 .and_local_timezone(tz)
                 .unwrap();
-            dbg!(start);
+
             let periods = (0..365)
                 .map(|i| start + chrono::Days::new(i))
                 .collect::<Vec<_>>();
 
             for period in periods {
-                dbg!(period);
                 let zoned =
                     Zoned::<R, _>::from_local(period.with_timezone(&period.offset().fix()), tz);
                 assert_eq!(period.date_naive(), zoned.earliest().date_naive(),);
