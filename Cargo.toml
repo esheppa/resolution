@@ -13,8 +13,17 @@ version = "0.4.23"
 default-features = false
 features = ["std"]
 
+
 [dev-dependencies]
 serde_json = "1.0.81"
+chrono-tz = "0.8.0"
 
 [features]
 with_serde = ["serde","chrono/serde"]
+
+
+[patch.crates-io.chrono]
+default-features = false
+features = ["std"]
+git = "https://github.com/chronotope/chrono"
+rev = "ff370ae656a52ada172bb7a0fd98d1051a998a93"
