@@ -59,6 +59,7 @@ impl<const N: u32> From<chrono::NaiveDateTime> for Minutes<N> {
     fn from(d: chrono::NaiveDateTime) -> Self {
         Minutes {
             index: d.timestamp().div_euclid(60 * i64::from(N)),
+            // index: d.timestamp() / (60 * i64::from(N)),
         }
     }
 }

@@ -24,6 +24,9 @@ pub use quarter::Quarter;
 mod year;
 pub use year::Year;
 
+mod zoned;
+pub use zoned::Zoned;
+
 pub fn format_erased_resolution(
     handle_unknown: fn(any::TypeId, i64) -> String,
     tid: any::TypeId,
@@ -140,86 +143,13 @@ impl fmt::Display for Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub trait TimeZone: chrono::TimeZone + Copy + Clone + Send + Sync + fmt::Display {}
-
-pub struct Zoned<R, Z>
-where
-    R: TimeResolution,
-    Z: TimeZone,
-{
-    resolution: R,
-    zone: Z,
-}
-
-// here the resolution must be in UTC
-// such that we have a proper monotonic mapping
-impl<R, Z> Zoned<R, Z>
-where
-    R: SubDateResolution,
-    Z: TimeZone,
-{
-    pub fn from_utc(resolution: R, zone: Z) -> Self {
-        Zoned { resolution, zone }
-    }
-}
-
-// here the resolution is the same
-// whichever zone is applied
-impl<R, Z> Zoned<R, Z>
-where
-    R: DateResolution,
-    Z: TimeZone,
-{
-    pub fn from_parts(resolution: R, zone: Z) -> Self {
-        Zoned { resolution, zone }
-    }
-}
-
-impl<R, Z> Zoned<R, Z>
-where
-    R: TimeResolution,
-    Z: TimeZone,
-{
-    pub fn start(&self) -> chrono::DateTime<Z> {
-        chrono::TimeZone::from_utc_datetime(&self.zone, &self.resolution.start_datetime())
-    }
-    pub fn end(&self) -> chrono::DateTime<Z> {
-        chrono::TimeZone::from_utc_datetime(&self.zone, &self.resolution.succ().start_datetime())
-    }
-    pub fn zone(&self) -> Z {
-        self.zone
-    }
-}
-
-impl<R, Z> From<chrono::DateTime<Z>> for Zoned<R, Z>
-where
-    R: TimeResolution,
-    Z: TimeZone,
-{
-    fn from(time: chrono::DateTime<Z>) -> Self {
-        Zoned {
-            resolution: time.naive_utc().into(),
-            zone: time.timezone(),
-        }
-    }
-}
-
-impl<R, Z> From<Zoned<R, Z>> for chrono::DateTime<Z>
-where
-    R: TimeResolution,
-    Z: TimeZone,
-{
-    fn from(zoned: Zoned<R, Z>) -> Self {
-        zoned.start()
-    }
-}
-
 pub trait TimeResolution:
     Send + Sync + Copy + Eq + Ord + From<chrono::NaiveDateTime> + Monotonic
 {
     fn succ(&self) -> Self {
         self.succ_n(1)
     }
+
     fn pred(&self) -> Self {
         self.pred_n(1)
     }
@@ -228,6 +158,7 @@ pub trait TimeResolution:
     // makes sense to require just the n
     // and give the 1 for free
     fn succ_n(&self, n: u32) -> Self;
+
     fn pred_n(&self, n: u32) -> Self;
 
     fn start_datetime(&self) -> chrono::NaiveDateTime;
@@ -247,8 +178,10 @@ pub trait Monotonic {
 // bound for resolutions that are less than one day long
 pub trait SubDateResolution: TimeResolution {
     fn occurs_on_date(&self) -> chrono::NaiveDate;
+
     // the first of the resolutions units that occurs on the day
     fn first_on_day(day: chrono::NaiveDate) -> Self;
+
     fn last_on_day(day: chrono::NaiveDate) -> Self {
         Self::first_on_day(day + chrono::Duration::days(1)).pred()
     }
@@ -268,20 +201,25 @@ pub trait DateResolutionExt: DateResolution {
     ) -> chrono::format::DelayedFormat<chrono::format::StrftimeItems<'a>> {
         self.start().format(fmt)
     }
+
     fn end(&self) -> chrono::NaiveDate {
         self.succ().start() - chrono::Duration::days(1)
     }
+
     fn num_days(&self) -> i64 {
         (self.end() - self.start()).num_days() + 1
     }
+
     fn to_sub_date_resolution<R: SubDateResolution>(&self) -> range::TimeRange<R> {
         range::TimeRange::from_start_end(R::first_on_day(self.start()), R::last_on_day(self.end()))
             .expect("Will always have at least one within the day")
     }
+
     fn rescale<R: DateResolution>(&self) -> range::TimeRange<R> {
         range::TimeRange::from_start_end(self.start().into(), self.end().into())
             .expect("Will always have at least one day")
     }
+
     // fn days(&self) -> collections::BTreeSet<chrono::NaiveDate> {
     //     (0..)
     //         .map(|n| self.start() + chrono::Duration::days(n))
