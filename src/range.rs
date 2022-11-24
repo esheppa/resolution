@@ -3,6 +3,9 @@ use crate::{DateResolution, DateResolutionExt, SubDateResolution, TimeResolution
 use serde::de;
 use std::{collections, fmt, mem, num};
 
+/// `TimeRange` stores a contigious sequence of underlying periods of a given `TimeResolution`.
+///
+/// This is useful to represent the time axis of a timeseries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "with_serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct TimeRange<P: TimeResolution> {
