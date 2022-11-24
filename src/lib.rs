@@ -1,6 +1,6 @@
 use std::{any, fmt, num, str};
 
-pub mod range;
+mod range;
 pub use range::{Cache, CacheResponse, TimeRange, TimeRangeComparison, TimeRangeIter};
 
 mod minutes;
