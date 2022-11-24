@@ -1,6 +1,6 @@
 use std::{any, fmt, num, str};
 
-pub mod range;
+mod range;
 pub use range::{Cache, CacheResponse, TimeRange, TimeRangeComparison, TimeRangeIter};
 
 mod minutes;
@@ -27,6 +27,10 @@ pub use year::Year;
 mod zoned;
 pub use zoned::Zoned;
 
+/// This function is useful for formatting types implementing `Monotonic` when they are stored
+/// in their `i64` form instead of their `TimeResolution` form. Provided you have the `TypeId` handy
+/// you can find out what they were intended to be. This function handeles all the cases implemented
+/// in this library and users can handle others via the function in the `handle_unknown` parameter.
 pub fn format_erased_resolution(
     handle_unknown: fn(any::TypeId, i64) -> String,
     tid: any::TypeId,
@@ -143,6 +147,12 @@ impl fmt::Display for Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// `TimeResolution` should be used for contigious series of periods in time
+///
+/// This makes sense for the time part of a discrete timeseries, with observations
+/// occurring at regular times. Some examples are:
+/// * A cash-flow report aggregated to days or months
+/// * Dispatch periods in the Australian Electricity Market (and similar concepts in other energy markets)
 pub trait TimeResolution:
     Send + Sync + Copy + Eq + Ord + From<chrono::NaiveDateTime> + Monotonic
 {
@@ -166,6 +176,11 @@ pub trait TimeResolution:
     fn name(&self) -> String;
 }
 
+/// `Monotonic` is used to enable multiple different resolutions to be stored together
+///
+/// It is named monotonic as it is intended to provide a monotonic (order preserving) function
+/// from a given implementor of `TimeResolution`, to allow converting backwards and forwards
+/// between the values of the `TimeResolution` implementor and `i64`s
 pub trait Monotonic {
     // we choose i64 rather than u64
     // as the behaviour on subtraction is nicer!
@@ -174,8 +189,7 @@ pub trait Monotonic {
     fn between(&self, other: Self) -> i64;
 }
 
-// This trait exists to be able to provide a trait
-// bound for resolutions that are less than one day long
+/// `SubDateResolution` should only be implemented for periods of strictly less than one day in length
 pub trait SubDateResolution: TimeResolution {
     fn occurs_on_date(&self) -> chrono::NaiveDate;
 
@@ -187,13 +201,13 @@ pub trait SubDateResolution: TimeResolution {
     }
 }
 
-// This trait exists to be able to provide a trait
-// bound for resolutiopns that are one day long or longer.
-// Due to this it can have a number of useful methods
+/// `DateResolution` should only be implemented for periods of one or more days in length
 pub trait DateResolution: TimeResolution + From<chrono::NaiveDate> {
     fn start(&self) -> chrono::NaiveDate;
 }
 
+/// `DateResolutionExt` implements some convenience methods for types that implement `DateResolution`
+// This is an extra trait to avoid the methods being overriden
 pub trait DateResolutionExt: DateResolution {
     fn format<'a>(
         &self,

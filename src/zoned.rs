@@ -11,6 +11,12 @@ pub trait TimeZone: chrono::TimeZone + Copy + Clone + Send + Sync + fmt::Display
 impl TimeZone for chrono::Utc {}
 impl TimeZone for chrono::FixedOffset {}
 
+/// `Zoned` stores a `TimeResolution` representing the local time in the zone, plus the relevant
+/// offset and zone itself. This is intended to allow assertion that a given resolution is in a certain
+/// timezone and thus allow finding the start and end times of that resolution with their correct UTC offsets.
+///
+/// warning: this should not be used for `SubDateResolution`s larger than `Minutes<60>` or equivalent. (Ideally
+/// this restriction will be removed later)
 pub struct Zoned<R, Z>
 where
     R: TimeResolution,
