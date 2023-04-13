@@ -9,7 +9,7 @@ features = ["derive"]
 optional = true
 
 [dependencies.chrono]
-version = "0.4.23"
+version = "0.4.24"
 default-features = false
 features = ["std"]
 
@@ -20,10 +20,3 @@ chrono-tz = "0.8.0"
 
 [features]
 with_serde = ["serde","chrono/serde"]
-
-
-[patch.crates-io.chrono]
-default-features = false
-features = ["std"]
-git = "https://github.com/chronotope/chrono"
-rev = "ff370ae656a52ada172bb7a0fd98d1051a998a93"

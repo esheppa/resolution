@@ -159,7 +159,7 @@ impl<P: TimeResolution> TimeRange<P> {
         self.start
     }
     pub fn end(&self) -> P {
-        self.start.succ_n(self.len.get())
+        self.start.succ_n(self.len.get() - 1)
     }
     pub fn contains(&self, rhs: P) -> bool {
         rhs >= self.start && rhs <= self.end()
