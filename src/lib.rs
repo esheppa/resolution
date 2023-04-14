@@ -15,7 +15,7 @@ mod day;
 pub use day::Day;
 
 mod week;
-pub use week::{StartDay, Week};
+pub use week::{Friday, Monday, Saturday, StartDay, Sunday, Thursday, Tuesday, Wednesday, Week};
 
 mod month;
 pub use month::Month;
