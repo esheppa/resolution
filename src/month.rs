@@ -138,6 +138,23 @@ impl Month {
     pub fn month_num(&self) -> u32 {
         self.start().month()
     }
+    pub fn month(&self) -> chrono::Month {
+        match self.month_num() {
+            1 => chrono::Month::January,
+            2 => chrono::Month::February,
+            3 => chrono::Month::March,
+            4 => chrono::Month::April,
+            5 => chrono::Month::May,
+            6 => chrono::Month::June,
+            7 => chrono::Month::July,
+            8 => chrono::Month::August,
+            9 => chrono::Month::September,
+            10 => chrono::Month::October,
+            11 => chrono::Month::November,
+            12 => chrono::Month::December,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Display for Month {

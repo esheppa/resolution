@@ -1,5 +1,5 @@
 use crate::{Monotonic, TimeResolution};
-use chrono::Timelike;
+use chrono::{Duration, Timelike};
 use std::{fmt, str};
 
 const NUM_SECS: i64 = 60;
@@ -100,7 +100,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
             }
             let end = chrono::NaiveDateTime::parse_from_str(end, PARSE_FORMAT)?;
 
-            if (end - start).num_minutes() + 1 != i64::from(N) {
+            if start + Duration::minutes(i64::from(N)) != end {
                 return Err(crate::Error::ParseCustom {
                     ty_name: "Minutes",
                     input: format!(
@@ -123,8 +123,8 @@ impl<const N: u32> fmt::Display for Minutes<N> {
             write!(
                 f,
                 "{} => {}",
-                self.start_datetime(),
-                self.succ().start_datetime()
+                self.start_datetime().format(PARSE_FORMAT),
+                self.succ().start_datetime().format(PARSE_FORMAT)
             )
         }
     }
@@ -235,7 +235,7 @@ mod tests {
         assert!("2021-01-01 10:05 => 2021-01-01 10:06"
             .parse::<Minutes<2>>()
             .is_err());
-        assert!("2021-01-01 10:02 => 2021-01-01 10:03"
+        assert!("2021-01-01 10:02 => 2021-01-01 10:04"
             .parse::<Minutes<2>>()
             .is_ok());
 
@@ -269,7 +269,7 @@ mod tests {
         );
 
         assert_eq!(
-            "2021-01-01 10:02 => 2021-01-01 10:03"
+            "2021-01-01 10:02 => 2021-01-01 10:04"
                 .parse::<Minutes<2>>()
                 .unwrap(),
             chrono::NaiveDate::from_ymd_opt(2021, 1, 1)
@@ -280,7 +280,7 @@ mod tests {
         );
 
         assert_eq!(
-            "2021-01-01 10:00 => 2021-01-01 10:04"
+            "2021-01-01 10:00 => 2021-01-01 10:05"
                 .parse::<Minutes<5>>()
                 .unwrap(),
             chrono::NaiveDate::from_ymd_opt(2021, 1, 1)
