@@ -292,6 +292,7 @@ day_subdivision_impl!(240);
 day_subdivision_impl!(360);
 day_subdivision_impl!(720);
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct DaySubdivison<const N: u32> {
     index: i64,
 }
