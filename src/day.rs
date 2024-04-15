@@ -1,12 +1,15 @@
 use crate::DateResolution;
+use alloc::{
+    fmt, str,
+    string::{String, ToString},
+};
 use chrono::Datelike;
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 use serde::de;
-use std::{fmt, str};
 
 const DATE_FORMAT: &str = "%Y-%m-%d";
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl<'de> de::Deserialize<'de> for Day {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Day, D::Error>
     where
@@ -19,7 +22,7 @@ impl<'de> de::Deserialize<'de> for Day {
     }
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for Day {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -120,10 +123,13 @@ impl Day {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DateResolution, DateResolutionExt, TimeResolution};
+    use crate::{DateResolution, TimeResolution};
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_roundtrip() {
+        use crate::DateResolutionExt;
+
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
 
         let wk = Day::from(dt);

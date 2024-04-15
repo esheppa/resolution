@@ -1,12 +1,14 @@
 use crate::DateResolution;
+use alloc::{
+    fmt, format, str,
+    string::{String, ToString},
+};
 use chrono::Datelike;
-#[cfg(feature = "with_serde")]
+use core::convert::TryFrom;
+#[cfg(feature = "serde")]
 use serde::de;
-use std::{convert::TryFrom, fmt, str};
 
-const DATE_FORMAT: &str = "%b-%Y";
-
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl<'de> de::Deserialize<'de> for Month {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Month, D::Error>
     where
@@ -18,7 +20,7 @@ impl<'de> de::Deserialize<'de> for Month {
     }
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for Month {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -51,6 +53,23 @@ fn month_num_from_name(name: &str) -> Result<u32, crate::Error> {
         }
     };
     Ok(num)
+}
+
+fn month_name_from_num(month: chrono::Month) -> &'static str {
+    match month {
+        chrono::Month::January => "Jan",
+        chrono::Month::February => "Feb",
+        chrono::Month::March => "Mar",
+        chrono::Month::April => "Apr",
+        chrono::Month::May => "May",
+        chrono::Month::June => "Jun",
+        chrono::Month::July => "Jul",
+        chrono::Month::August => "Aug",
+        chrono::Month::September => "Sep",
+        chrono::Month::October => "Oct",
+        chrono::Month::November => "Nov",
+        chrono::Month::December => "Dec",
+    }
 }
 
 impl str::FromStr for Month {
@@ -138,21 +157,46 @@ impl Month {
     pub fn month_num(&self) -> u32 {
         self.start().month()
     }
+    pub fn month(&self) -> chrono::Month {
+        match self.month_num() {
+            1 => chrono::Month::January,
+            2 => chrono::Month::February,
+            3 => chrono::Month::March,
+            4 => chrono::Month::April,
+            5 => chrono::Month::May,
+            6 => chrono::Month::June,
+            7 => chrono::Month::July,
+            8 => chrono::Month::August,
+            9 => chrono::Month::September,
+            10 => chrono::Month::October,
+            11 => chrono::Month::November,
+            12 => chrono::Month::December,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Display for Month {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.start().format(DATE_FORMAT))
+        write!(
+            f,
+            "{}-{}",
+            month_name_from_num(self.month()),
+            self.start().year()
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Month;
-    use crate::{DateResolution, DateResolutionExt, TimeResolution};
+    use crate::{DateResolution, TimeResolution};
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_roundtrip() {
+        use crate::DateResolutionExt;
+
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
 
         let m1 = Month::from(dt);

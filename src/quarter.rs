@@ -1,8 +1,13 @@
 use crate::{month, year, DateResolution, DateResolutionExt};
+use alloc::{
+    fmt, str,
+    string::{String, ToString},
+    vec::Vec,
+};
 use chrono::Datelike;
-#[cfg(feature = "with_serde")]
+use core::convert::TryFrom;
+#[cfg(feature = "serde")]
 use serde::de;
-use std::{convert::TryFrom, fmt, str};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Quarter(i64);
@@ -95,6 +100,7 @@ mod tests {
     use crate::{DateResolution, TimeResolution};
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_roundtrip() {
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
 
@@ -168,7 +174,7 @@ mod tests {
     }
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl<'de> de::Deserialize<'de> for Quarter {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Quarter, D::Error>
     where
@@ -180,7 +186,7 @@ impl<'de> de::Deserialize<'de> for Quarter {
     }
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for Quarter {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

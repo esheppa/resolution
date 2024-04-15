@@ -1,6 +1,7 @@
-use std::{fmt, hash, marker, str};
-
+use alloc::{fmt, str};
+use alloc::{format, string::String};
 use chrono::Datelike;
+use core::marker;
 
 mod private {
     pub trait Sealed {}
@@ -21,7 +22,6 @@ pub trait StartDay:
     + Copy
     + Clone
     + fmt::Debug
-    + hash::Hash
     + PartialEq
     + Eq
     + PartialOrd
@@ -31,19 +31,19 @@ pub trait StartDay:
     fn weekday() -> chrono::Weekday;
 }
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Monday;
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Tuesday;
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Wednesday;
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Thursday;
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Friday;
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Saturday;
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Sunday;
 
 impl StartDay for Monday {
@@ -90,14 +90,14 @@ impl StartDay for Sunday {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialOrd, PartialEq, Ord, Hash)]
-#[cfg_attr(feature = "with_serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "with_serde", serde(try_from = "Week_", into = "Week_"))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "Week_", into = "Week_"))]
 pub struct Week<D: StartDay> {
     n: i64,
     d: marker::PhantomData<D>,
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl<D: StartDay> TryFrom<Week_> for Week<D> {
     type Error = String;
     fn try_from(value: Week_) -> Result<Self, Self::Error> {
@@ -114,9 +114,10 @@ impl<D: StartDay> TryFrom<Week_> for Week<D> {
     }
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 impl<D: StartDay> From<Week<D>> for Week_ {
     fn from(w: Week<D>) -> Self {
+        use alloc::string::ToString;
         Week_ {
             n: w.n,
             start_day: D::NAME.to_string(),
@@ -124,7 +125,7 @@ impl<D: StartDay> From<Week<D>> for Week_ {
     }
 }
 
-#[cfg(feature = "with_serde")]
+#[cfg(feature = "serde")]
 #[derive(serde::Deserialize, serde::Serialize)]
 struct Week_ {
     n: i64,
@@ -227,10 +228,13 @@ impl<D: StartDay> From<chrono::NaiveDateTime> for Week<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DateResolution, DateResolutionExt, TimeResolution};
+    use crate::{DateResolution, TimeResolution};
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_roundtrip() {
+        use crate::DateResolutionExt;
+
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).expect("valid date");
 
         let wk = Week::<Monday>::from(dt);
