@@ -1,10 +1,11 @@
 use crate::{month, DateResolution, DateResolutionExt};
+use alloc::string::{String, ToString};
 use chrono::Datelike;
-use std::{convert::TryFrom, fmt, str};
+use core::{convert::TryFrom, fmt, str};
 
 #[derive(Clone, Copy, Debug, Eq, PartialOrd, PartialEq, Ord, Hash)]
-#[cfg_attr(feature = "with_serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "with_serde", serde(transparent))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Year(i64);
 
 impl crate::DateResolution for Year {
@@ -93,6 +94,7 @@ mod tests {
     use crate::{DateResolution, TimeResolution};
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_roundtrip() {
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
 

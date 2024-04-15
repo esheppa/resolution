@@ -1,26 +1,24 @@
-use crate::{Monotonic, TimeResolution};
-use chrono::{Duration, Timelike};
-use std::{fmt, str};
+use crate::{Error, Monotonic, SubDateResolution, TimeResolution};
+use alloc::{
+    fmt, format, str,
+    string::{String, ToString},
+};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Utc};
 
 const NUM_SECS: i64 = 60;
-
-const PARSE_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 /// Note that for sensible behaviour, the N chosen should be a number that either:
 /// 1. divides into an hour with no remainder (1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60)
 /// 2. is exactly a whole number of hours that divides into a day with no remainder (60, 120, 180, 240, 360, 480, 1800)
 /// Any other choice will result in unexpected / unuseful behaviour (eg the `Minutes` not cleanly fitting into parts of a day)
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[cfg_attr(feature = "with_serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "with_serde",
-    serde(try_from = "Minutes_", into = "Minutes_")
-)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "Minutes_", into = "Minutes_"))]
 pub struct Minutes<const N: u32> {
     index: i64,
 }
 
-// #[cfg(not(with_serde))]
+// #[cfg(not(serde))]
 // #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 // pub struct Minutes<const N: u32> {
 //     index: i64,
@@ -49,7 +47,7 @@ impl<const N: u32> From<Minutes<N>> for Minutes_ {
     }
 }
 
-#[cfg_attr(feature = "with_serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct Minutes_ {
     index: i64,
     pub(crate) length: u32,
@@ -58,7 +56,7 @@ pub(crate) struct Minutes_ {
 impl<const N: u32> From<chrono::NaiveDateTime> for Minutes<N> {
     fn from(d: chrono::NaiveDateTime) -> Self {
         Minutes {
-            index: d.timestamp().div_euclid(60 * i64::from(N)),
+            index: d.and_utc().timestamp().div_euclid(60 * i64::from(N)),
             // index: d.timestamp() / (60 * i64::from(N)),
         }
     }
@@ -68,7 +66,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
     type Err = crate::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if N == 1 {
-            let time = chrono::NaiveDateTime::parse_from_str(s, PARSE_FORMAT)?;
+            let time = parse_naive_datetime(s)?;
             if time.second() != 0 {
                 Err(crate::Error::ParseCustom {
                     ty_name: "Minutes",
@@ -90,7 +88,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
                 input: s.into(),
             })?;
 
-            let start = chrono::NaiveDateTime::parse_from_str(start, PARSE_FORMAT)?;
+            let start = parse_naive_datetime(start)?;
 
             if (start.hour() * 60 + start.minute()).rem_euclid(N) != 0 {
                 return Err(crate::Error::ParseCustom {
@@ -98,7 +96,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
                     input: format!("Invalid start for Minutes[Length:{}]: {}", N, start,),
                 });
             }
-            let end = chrono::NaiveDateTime::parse_from_str(end, PARSE_FORMAT)?;
+            let end = parse_naive_datetime(end)?;
 
             if start + Duration::minutes(i64::from(N)) != end {
                 return Err(crate::Error::ParseCustom {
@@ -115,17 +113,62 @@ impl<const N: u32> str::FromStr for Minutes<N> {
     }
 }
 
+// TODO: make this more efficient
+fn format_naive_datetime(n: NaiveDateTime, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(
+        f,
+        "{}-{}-{} {}:{}",
+        n.year(),
+        n.month(),
+        n.day(),
+        n.hour(),
+        n.minute()
+    )
+}
+
+fn parse_naive_datetime(input: &str) -> Result<NaiveDateTime, Error> {
+    let year = input[0..=3]
+        .parse()
+        .map_err(|e| Error::ParseIntDetailed(e, input[0..=3].to_string()))?;
+    let month = input[5..=6]
+        .parse()
+        .map_err(|e| Error::ParseIntDetailed(e, input[5..=6].to_string()))?;
+    let day = input[8..=9]
+        .parse()
+        .map_err(|e| Error::ParseIntDetailed(e, input[8..=9].to_string()))?;
+    let hour = input[11..=12]
+        .parse()
+        .map_err(|e| Error::ParseIntDetailed(e, input[10..=12].to_string()))?;
+    let minute = input[14..=15]
+        .parse()
+        .map_err(|e| Error::ParseIntDetailed(e, input[14..=15].to_string()))?;
+
+    let date =
+        NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| Error::ParseDateInternal {
+            message: alloc::format!("Invalid values for ymd: {year}-{month}-{day}"),
+            input: input.to_string(),
+            format: "%Y/%m/%d %H:%M",
+        })?;
+
+    let time =
+        NaiveTime::from_hms_opt(hour, minute, 0).ok_or_else(|| Error::ParseDateInternal {
+            message: alloc::format!("Invalid values for hm: {hour}:{minute}"),
+            input: input.to_string(),
+            format: "%Y/%m/%d %H:%M",
+        })?;
+
+    Ok(date.and_time(time))
+}
+
 impl<const N: u32> fmt::Display for Minutes<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if N == 1 {
-            write!(f, "{}", self.start_datetime())
+            format_naive_datetime(self.start_datetime(), f)
         } else {
-            write!(
-                f,
-                "{} => {}",
-                self.start_datetime().format(PARSE_FORMAT),
-                self.succ().start_datetime().format(PARSE_FORMAT)
-            )
+            format_naive_datetime(self.start_datetime(), f)?;
+            f.write_str(" => ")?;
+            format_naive_datetime(self.succ().start_datetime(), f)?;
+            Ok(())
         }
     }
 }
@@ -142,8 +185,9 @@ impl<const N: u32> crate::TimeResolution for Minutes<N> {
         }
     }
     fn start_datetime(&self) -> chrono::NaiveDateTime {
-        chrono::NaiveDateTime::from_timestamp_opt(self.index * NUM_SECS * i64::from(N), 0)
+        DateTime::<Utc>::from_timestamp(self.index * NUM_SECS * i64::from(N), 0)
             .expect("valid timestamp")
+            .naive_utc()
     }
     fn name(&self) -> String {
         format!("Minutes[Length:{}]", N)
@@ -164,24 +208,154 @@ impl<const N: u32> Monotonic for Minutes<N> {
 
 impl<const N: u32> Minutes<N> {}
 
-impl<const N: u32> crate::SubDateResolution for Minutes<N> {
+impl<const N: u32> SubDateResolution for Minutes<N> {
     fn occurs_on_date(&self) -> chrono::NaiveDate {
         self.start_datetime().date()
     }
     fn first_on_day(day: chrono::NaiveDate) -> Self {
         Self::from_monotonic(
-            day.and_hms_opt(0, 0, 0).expect("valid time").timestamp() / (i64::from(N) * NUM_SECS),
+            day.and_hms_opt(0, 0, 0)
+                .expect("valid time")
+                .and_utc()
+                .timestamp()
+                / (i64::from(N) * NUM_SECS),
         )
     }
+}
+
+macro_rules! minutes_impl {
+    ($i:literal) => {
+        impl Minutes<$i> {
+            pub fn relative(&self) -> DaySubdivison<$i> {
+                DaySubdivison {
+                    index: Minutes::<$i>::first_on_day(self.occurs_on_date()).between(*self),
+                }
+            }
+        }
+    };
+}
+
+macro_rules! day_subdivision_impl {
+    ($i:literal) => {
+        impl DaySubdivison<$i> {
+            pub const PERIODS: u32 = 1440 / $i;
+            pub fn on_date(&self, date: NaiveDate) -> Minutes<$i> {
+                Minutes::<$i>::from_monotonic(
+                    self.index + Minutes::<$i>::first_on_day(date).to_monotonic(),
+                )
+            }
+            pub fn new(period_no: i64) -> Option<DaySubdivison<$i>> {
+                if period_no == 0 || period_no > i64::from(Self::PERIODS) {
+                    return None;
+                }
+
+                Some(DaySubdivison { index: period_no })
+            }
+            pub fn index(&self) -> i64 {
+                self.index + 1
+            }
+        }
+    };
+}
+
+minutes_impl!(1);
+minutes_impl!(2);
+minutes_impl!(3);
+minutes_impl!(4);
+minutes_impl!(5);
+minutes_impl!(6);
+minutes_impl!(10);
+minutes_impl!(15);
+minutes_impl!(20);
+minutes_impl!(30);
+minutes_impl!(60);
+minutes_impl!(120);
+minutes_impl!(180);
+minutes_impl!(240);
+minutes_impl!(360);
+minutes_impl!(720);
+
+day_subdivision_impl!(1);
+day_subdivision_impl!(2);
+day_subdivision_impl!(3);
+day_subdivision_impl!(4);
+day_subdivision_impl!(5);
+day_subdivision_impl!(6);
+day_subdivision_impl!(10);
+day_subdivision_impl!(15);
+day_subdivision_impl!(20);
+day_subdivision_impl!(30);
+day_subdivision_impl!(60);
+day_subdivision_impl!(120);
+day_subdivision_impl!(180);
+day_subdivision_impl!(240);
+day_subdivision_impl!(360);
+day_subdivision_impl!(720);
+
+pub struct DaySubdivison<const N: u32> {
+    index: i64,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SubDateResolution, TimeResolution};
+    use crate::TimeResolution;
 
     #[test]
+    fn test_relative() {
+        let base = "2021-01-01 00:00".parse::<Minutes<1>>().unwrap();
+
+        for i in 0..1440 {
+            assert_eq!(base.succ_n(i * 1440).relative().index(), 1);
+            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+        }
+
+        let base = "2021-01-01 00:00 => 2021-01-01 00:02"
+            .parse::<Minutes<2>>()
+            .unwrap();
+        for i in 0..720 {
+            assert_eq!(base.succ_n(i * 720).relative().index(), 1);
+            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+        }
+
+        let base = "2021-01-01 00:00 => 2021-01-01 00:05"
+            .parse::<Minutes<5>>()
+            .unwrap();
+        for i in 0..288 {
+            assert_eq!(base.succ_n(i * 288).relative().index(), 1);
+            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+        }
+
+        let base = "2021-01-01 00:00 => 2021-01-01 00:30"
+            .parse::<Minutes<30>>()
+            .unwrap();
+        for i in 0..48 {
+            assert_eq!(base.succ_n(i * 48).relative().index(), 1);
+            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+        }
+
+        let base = "2021-01-01 00:00 => 2021-01-01 01:00"
+            .parse::<Minutes<60>>()
+            .unwrap();
+        for i in 0..24 {
+            assert_eq!(base.succ_n(i * 24).relative().index(), 1);
+            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+        }
+
+        let base = "2021-01-01 00:00 => 2021-01-01 02:00"
+            .parse::<Minutes<120>>()
+            .unwrap();
+        for i in 0..12 {
+            assert_eq!(base.succ_n(i * 12).relative().index(), 1);
+            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
     fn test_roundtrip() {
+        use crate::SubDateResolution;
+
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
         let tm = dt.and_hms_opt(0, 0, 0).unwrap();
 

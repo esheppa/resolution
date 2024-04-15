@@ -1,15 +1,22 @@
 use crate::DateResolution;
+use crate::Monotonic;
 use crate::SubDateResolution;
 use crate::TimeResolution;
+use alloc::format;
+use alloc::string::String;
 use chrono::FixedOffset;
 use chrono::NaiveTime;
 use chrono::Offset;
-use std::fmt;
+use core::fmt;
 
-pub trait TimeZone: chrono::TimeZone + Copy + Clone + Send + Sync + fmt::Display {}
+pub trait TimeZone:
+    chrono::TimeZone + Copy + Clone + Send + Sync + fmt::Display + fmt::Debug
+{
+}
 
 impl TimeZone for chrono::Utc {}
 impl TimeZone for chrono::FixedOffset {}
+impl TimeZone for chrono_tz::Tz {}
 
 /// `Zoned` stores a `TimeResolution` representing the local time in the zone, plus the relevant
 /// offset and zone itself. This is intended to allow assertion that a given resolution is in a certain
@@ -17,6 +24,7 @@ impl TimeZone for chrono::FixedOffset {}
 ///
 /// warning: this should not be used for `SubDateResolution`s larger than `Minutes<60>` or equivalent. (Ideally
 /// this restriction will be removed later)
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Zoned<R, Z>
 where
     R: TimeResolution,
@@ -25,6 +33,98 @@ where
     resolution: R,
     offset: FixedOffset,
     zone: Z,
+}
+
+impl<R> Monotonic for Zoned<R, chrono::Utc>
+where
+    R: TimeResolution,
+{
+    fn to_monotonic(&self) -> i64 {
+        self.resolution.to_monotonic()
+    }
+
+    fn from_monotonic(idx: i64) -> Self {
+        let resolution = R::from_monotonic(idx);
+        Zoned {
+            resolution,
+            offset: FixedOffset::east_opt(0).unwrap(),
+            zone: chrono::Utc,
+        }
+    }
+
+    fn between(&self, other: Self) -> i64 {
+        other.to_monotonic() - self.to_monotonic()
+    }
+}
+
+impl<R> From<chrono::NaiveDateTime> for Zoned<R, chrono::Utc>
+where
+    R: TimeResolution,
+{
+    fn from(value: chrono::NaiveDateTime) -> Self {
+        Zoned {
+            resolution: R::from(value),
+            offset: FixedOffset::east_opt(0).unwrap(),
+            zone: chrono::Utc,
+        }
+    }
+}
+
+impl<R> Copy for Zoned<R, chrono::Utc> where R: TimeResolution {}
+
+impl<R> Ord for Zoned<R, chrono::Utc>
+where
+    R: TimeResolution,
+{
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.resolution.cmp(&other.resolution)
+    }
+}
+
+impl<R> PartialOrd for Zoned<R, chrono::Utc>
+where
+    R: TimeResolution,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+// impl<R> SubDateResolution for Zoned<R, chrono::Utc>
+// where
+//     R: TimeResolution,
+// {
+//     fn occurs_on_date(&self) -> chrono::NaiveDate {
+//         todo!()
+//     }
+
+//     fn first_on_day(day: chrono::NaiveDate) -> Self {
+//         todo!()
+//     }
+// }
+
+impl<R> TimeResolution for Zoned<R, chrono::Utc>
+where
+    R: TimeResolution,
+{
+    fn succ_n(&self, n: u32) -> Self {
+        Self {
+            resolution: self.resolution.succ_n(n),
+            ..*self
+        }
+    }
+    fn pred_n(&self, n: u32) -> Self {
+        Self {
+            resolution: self.resolution.pred_n(n),
+            ..*self
+        }
+    }
+    fn start_datetime(&self) -> chrono::NaiveDateTime {
+        self.resolution.start_datetime()
+    }
+    fn name(&self) -> String {
+        format!("Zoned[{},Utc]", self.resolution.name())
+    }
 }
 
 impl<R, Z> Zoned<R, Z>
@@ -140,14 +240,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::TimeZone;
     use crate::DateResolution;
     use crate::Day;
     use crate::Minutes;
     use crate::Zoned;
+    use alloc::vec::Vec;
     use chrono::Offset;
-
-    impl TimeZone for chrono_tz::Tz {}
 
     #[test]
     fn test_subdate() {

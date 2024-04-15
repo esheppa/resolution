@@ -1,6 +1,16 @@
-use std::{any, fmt, num, str};
+#![no_std]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
+use core::{
+    any, fmt,
+    num::{self, ParseIntError},
+    str,
+};
 
 mod range;
+use alloc::{format, string::String};
 pub use range::{Cache, CacheResponse, TimeRange, TimeRangeComparison, TimeRangeIter};
 
 mod minutes;
@@ -25,7 +35,62 @@ mod year;
 pub use year::Year;
 
 mod zoned;
-pub use zoned::Zoned;
+pub use zoned::{TimeZone, Zoned};
+
+pub trait LongerThan<T> {}
+
+pub trait LongerThanOrEqual<T> {}
+
+pub trait ShorterThan<T> {}
+
+pub trait ShorterThanOrEqual<T> {}
+
+// TODO: use macro for this
+
+impl LongerThanOrEqual<Minute> for Minute {}
+impl LongerThanOrEqual<Minute> for FiveMinute {}
+impl LongerThanOrEqual<Minute> for HalfHour {}
+impl LongerThanOrEqual<Minute> for Hour {}
+impl LongerThanOrEqual<Minute> for Day {}
+impl<D> LongerThanOrEqual<Minute> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<Minute> for Quarter {}
+impl LongerThanOrEqual<Minute> for Year {}
+
+impl LongerThan<Minute> for FiveMinute {}
+impl LongerThan<Minute> for HalfHour {}
+impl LongerThan<Minute> for Hour {}
+impl LongerThan<Minute> for Day {}
+impl<D> LongerThan<Minute> for Week<D> where D: StartDay {}
+impl LongerThan<Minute> for Quarter {}
+impl LongerThan<Minute> for Year {}
+
+impl LongerThanOrEqual<FiveMinute> for FiveMinute {}
+impl LongerThanOrEqual<FiveMinute> for HalfHour {}
+impl LongerThanOrEqual<FiveMinute> for Hour {}
+impl LongerThanOrEqual<FiveMinute> for Day {}
+impl<D> LongerThanOrEqual<FiveMinute> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<FiveMinute> for Quarter {}
+impl LongerThanOrEqual<FiveMinute> for Year {}
+
+impl LongerThan<FiveMinute> for HalfHour {}
+impl LongerThan<FiveMinute> for Hour {}
+impl LongerThan<FiveMinute> for Day {}
+impl<D> LongerThan<FiveMinute> for Week<D> where D: StartDay {}
+impl LongerThan<FiveMinute> for Quarter {}
+impl LongerThan<FiveMinute> for Year {}
+
+impl LongerThanOrEqual<HalfHour> for HalfHour {}
+impl LongerThanOrEqual<HalfHour> for Hour {}
+impl LongerThanOrEqual<HalfHour> for Day {}
+impl<D> LongerThanOrEqual<HalfHour> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<HalfHour> for Quarter {}
+impl LongerThanOrEqual<HalfHour> for Year {}
+
+impl LongerThan<HalfHour> for Hour {}
+impl LongerThan<HalfHour> for Day {}
+impl<D> LongerThan<HalfHour> for Week<D> where D: StartDay {}
+impl LongerThan<HalfHour> for Quarter {}
+impl LongerThan<HalfHour> for Year {}
 
 /// This function is useful for formatting types implementing `Monotonic` when they are stored
 /// in their `i64` form instead of their `TimeResolution` form. Provided you have the `TypeId` handy
@@ -95,6 +160,12 @@ pub enum Error {
         actual: usize,
         format: &'static str,
     },
+    ParseIntDetailed(ParseIntError, String),
+    ParseDateInternal {
+        message: String,
+        input: String,
+        format: &'static str,
+    },
 }
 
 impl From<num::ParseIntError> for Error {
@@ -141,10 +212,24 @@ impl fmt::Display for Error {
                 f,
                 "Unexpected input length for format {format}, got {actual} but needed {required}"
             ),
+            ParseIntDetailed(e, detail) => {
+                write!(f, "Error parsing {detail} as integer: {e}")
+            }
+            ParseDateInternal {
+                message,
+                input,
+                format,
+            } => {
+                write!(
+                    f,
+                    "Error parsing {input} as date due to {message} using format {format}"
+                )
+            }
         }
     }
 }
 
+#[cfg(feature = "std")]
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// `TimeResolution` should be used for contigious series of periods in time
@@ -209,6 +294,7 @@ pub trait DateResolution: TimeResolution + From<chrono::NaiveDate> {
 /// `DateResolutionExt` implements some convenience methods for types that implement `DateResolution`
 // This is an extra trait to avoid the methods being overriden
 pub trait DateResolutionExt: DateResolution {
+    #[cfg(feature = "std")]
     fn format<'a>(
         &self,
         fmt: &'a str,
