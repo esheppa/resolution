@@ -14,7 +14,7 @@ use alloc::{format, string::String};
 pub use range::{Cache, CacheResponse, TimeRange, TimeRangeComparison, TimeRangeIter};
 
 mod minutes;
-pub use minutes::Minutes;
+pub use minutes::{Minutes, DaySubdivison};
 
 pub type Minute = Minutes<1>;
 pub type FiveMinute = Minutes<5>;
