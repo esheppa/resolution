@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use crate::{Error, Monotonic, SubDateResolution, TimeResolution};
 use alloc::{
     fmt, format, str,
@@ -117,7 +119,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
 fn format_naive_datetime(n: NaiveDateTime, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
         f,
-        "{}-{}-{} {}:{}",
+        "{}-{:02}-{:02} {:02}:{:02}",
         n.year(),
         n.month(),
         n.day(),
@@ -237,6 +239,18 @@ macro_rules! minutes_impl {
 
 macro_rules! day_subdivision_impl {
     ($i:literal) => {
+        // 1
+        impl Debug for DaySubdivison<$i> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct("DaySubdivison")
+                    .field("index", &self.index())
+                    .field("length_minutes", &$i)
+                    .field("periods", &Self::PERIODS)
+                    .finish()
+            }
+        }
+
+        // 2
         impl DaySubdivison<$i> {
             pub const PERIODS: u32 = 1440 / $i;
             pub fn on_date(&self, date: NaiveDate) -> Minutes<$i> {
@@ -292,7 +306,7 @@ day_subdivision_impl!(240);
 day_subdivision_impl!(360);
 day_subdivision_impl!(720);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct DaySubdivison<const N: u32> {
     index: i64,
 }
