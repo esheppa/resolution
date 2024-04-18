@@ -1,4 +1,5 @@
 use core::fmt::Debug;
+use core::num::NonZeroU32;
 
 use crate::{Error, Monotonic, SubDateResolution, TimeResolution};
 use alloc::{
@@ -258,15 +259,17 @@ macro_rules! day_subdivision_impl {
                     self.index + Minutes::<$i>::first_on_day(date).to_monotonic(),
                 )
             }
-            pub fn new(period_no: i64) -> Option<DaySubdivison<$i>> {
-                if period_no == 0 || period_no > i64::from(Self::PERIODS) {
+            pub fn new(period_no: NonZeroU32) -> Option<DaySubdivison<$i>> {
+                if i64::from(period_no.get()) > i64::from(Self::PERIODS) {
                     return None;
                 }
 
-                Some(DaySubdivison { index: period_no })
+                Some(DaySubdivison {
+                    index: i64::from(period_no.get()) - 1,
+                })
             }
-            pub fn index(&self) -> i64 {
-                self.index + 1
+            pub fn index(&self) -> NonZeroU32 {
+                NonZeroU32::new(u32::try_from(self.index).unwrap() + 1).unwrap()
             }
         }
     };
@@ -321,48 +324,72 @@ mod tests {
         let base = "2021-01-01 00:00".parse::<Minutes<1>>().unwrap();
 
         for i in 0..1440 {
-            assert_eq!(base.succ_n(i * 1440).relative().index(), 1);
-            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+            assert_eq!(
+                base.succ_n(i).relative(),
+                DaySubdivison::<1>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+            );
+            assert_eq!(base.succ_n(i * 1440).relative().index().get(), 1);
+            assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
         }
 
         let base = "2021-01-01 00:00 => 2021-01-01 00:02"
             .parse::<Minutes<2>>()
             .unwrap();
         for i in 0..720 {
-            assert_eq!(base.succ_n(i * 720).relative().index(), 1);
-            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+            assert_eq!(
+                base.succ_n(i).relative(),
+                DaySubdivison::<2>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+            );
+            assert_eq!(base.succ_n(i * 720).relative().index().get(), 1);
+            assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
         }
 
         let base = "2021-01-01 00:00 => 2021-01-01 00:05"
             .parse::<Minutes<5>>()
             .unwrap();
         for i in 0..288 {
-            assert_eq!(base.succ_n(i * 288).relative().index(), 1);
-            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+            assert_eq!(
+                base.succ_n(i).relative(),
+                DaySubdivison::<5>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+            );
+            assert_eq!(base.succ_n(i * 288).relative().index().get(), 1);
+            assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
         }
 
         let base = "2021-01-01 00:00 => 2021-01-01 00:30"
             .parse::<Minutes<30>>()
             .unwrap();
         for i in 0..48 {
-            assert_eq!(base.succ_n(i * 48).relative().index(), 1);
-            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+            assert_eq!(
+                base.succ_n(i).relative(),
+                DaySubdivison::<30>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+            );
+            assert_eq!(base.succ_n(i * 48).relative().index().get(), 1);
+            assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
         }
 
         let base = "2021-01-01 00:00 => 2021-01-01 01:00"
             .parse::<Minutes<60>>()
             .unwrap();
         for i in 0..24 {
-            assert_eq!(base.succ_n(i * 24).relative().index(), 1);
-            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+            assert_eq!(
+                base.succ_n(i).relative(),
+                DaySubdivison::<60>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+            );
+            assert_eq!(base.succ_n(i * 24).relative().index().get(), 1);
+            assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
         }
 
         let base = "2021-01-01 00:00 => 2021-01-01 02:00"
             .parse::<Minutes<120>>()
             .unwrap();
         for i in 0..12 {
-            assert_eq!(base.succ_n(i * 12).relative().index(), 1);
-            assert_eq!(base.succ_n(i).relative().index(), i64::from(i) + 1,);
+            assert_eq!(
+                base.succ_n(i).relative(),
+                DaySubdivison::<120>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+            );
+            assert_eq!(base.succ_n(i * 12).relative().index().get(), 1);
+            assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
         }
     }
 
