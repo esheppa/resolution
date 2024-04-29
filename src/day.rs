@@ -3,7 +3,7 @@ use alloc::{
     fmt, str,
     string::{String, ToString},
 };
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, NaiveTime, Utc};
 #[cfg(feature = "serde")]
 use serde::de;
 
@@ -66,9 +66,9 @@ impl From<chrono::NaiveDate> for Day {
     }
 }
 
-impl From<chrono::NaiveDateTime> for Day {
-    fn from(d: chrono::NaiveDateTime) -> Self {
-        d.date().into()
+impl From<DateTime<Utc>> for Day {
+    fn from(d: DateTime<Utc>) -> Self {
+        d.date_naive().into()
     }
 }
 
@@ -79,8 +79,8 @@ impl crate::TimeResolution for Day {
     fn pred_n(&self, n: u32) -> Day {
         Day(self.0 - i64::from(n))
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
-        self.start().and_hms_opt(0, 0, 0).expect("valid time")
+    fn start_datetime(&self) -> DateTime<Utc> {
+        self.start().and_time(NaiveTime::MIN).and_utc()
     }
     fn name(&self) -> String {
         "Day".to_string()
@@ -91,11 +91,14 @@ impl crate::Monotonic for Day {
     fn to_monotonic(&self) -> i64 {
         self.0
     }
-    fn from_monotonic(idx: i64) -> Self {
-        Day(idx)
-    }
     fn between(&self, other: Self) -> i64 {
         other.0 - self.0
+    }
+}
+
+impl crate::FromMonotonic for Day {
+    fn from_monotonic(idx: i64) -> Self {
+        Day(idx)
     }
 }
 

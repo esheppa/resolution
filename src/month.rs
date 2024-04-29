@@ -3,7 +3,7 @@ use alloc::{
     fmt, format, str,
     string::{String, ToString},
 };
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, NaiveTime, Utc};
 use core::convert::TryFrom;
 #[cfg(feature = "serde")]
 use serde::de;
@@ -103,8 +103,8 @@ impl crate::TimeResolution for Month {
     fn pred_n(&self, n: u32) -> Self {
         Month(self.0 - i64::from(n))
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
-        self.start().and_hms_opt(0, 0, 0).expect("valid datetime")
+    fn start_datetime(&self) -> DateTime<Utc> {
+        self.start().and_time(NaiveTime::MIN).and_utc()
     }
 
     fn name(&self) -> String {
@@ -116,11 +116,14 @@ impl crate::Monotonic for Month {
     fn to_monotonic(&self) -> i64 {
         self.0
     }
-    fn from_monotonic(idx: i64) -> Self {
-        Month(idx)
-    }
     fn between(&self, other: Self) -> i64 {
         other.0 - self.0
+    }
+}
+
+impl crate::FromMonotonic for Month {
+    fn from_monotonic(idx: i64) -> Self {
+        Month(idx)
     }
 }
 
@@ -138,9 +141,9 @@ impl From<chrono::NaiveDate> for Month {
     }
 }
 
-impl From<chrono::NaiveDateTime> for Month {
-    fn from(d: chrono::NaiveDateTime) -> Self {
-        d.date().into()
+impl From<DateTime<Utc>> for Month {
+    fn from(d: DateTime<Utc>) -> Self {
+        d.date_naive().into()
     }
 }
 

@@ -11,6 +11,7 @@ use core::{
 
 mod range;
 use alloc::{format, string::String};
+use chrono::{DateTime, Utc};
 pub use range::{Cache, CacheResponse, TimeRange, TimeRangeComparison, TimeRangeIter};
 
 mod minutes;
@@ -35,7 +36,7 @@ mod year;
 pub use year::Year;
 
 mod zoned;
-pub use zoned::{TimeZone, Zoned};
+pub use zoned::Zoned;
 
 pub trait LongerThan<T> {}
 
@@ -239,7 +240,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// * A cash-flow report aggregated to days or months
 /// * Dispatch periods in the Australian Electricity Market (and similar concepts in other energy markets)
 pub trait TimeResolution:
-    Send + Sync + Copy + Eq + Ord + From<chrono::NaiveDateTime> + Monotonic
+    Copy + Eq + Ord
+    // + From<DateTime<Utc>> 
+    + Monotonic
 {
     fn succ(&self) -> Self {
         self.succ_n(1)
@@ -256,7 +259,7 @@ pub trait TimeResolution:
 
     fn pred_n(&self, n: u32) -> Self;
 
-    fn start_datetime(&self) -> chrono::NaiveDateTime;
+    fn start_datetime(&self) -> DateTime<Utc>;
 
     fn name(&self) -> String;
 }
@@ -270,8 +273,11 @@ pub trait Monotonic {
     // we choose i64 rather than u64
     // as the behaviour on subtraction is nicer!
     fn to_monotonic(&self) -> i64;
-    fn from_monotonic(idx: i64) -> Self;
     fn between(&self, other: Self) -> i64;
+}
+
+pub trait FromMonotonic: Monotonic {
+    fn from_monotonic(idx: i64) -> Self;
 }
 
 /// `SubDateResolution` should only be implemented for periods of strictly less than one day in length

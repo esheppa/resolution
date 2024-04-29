@@ -1,12 +1,12 @@
 use core::fmt::Debug;
 use core::num::NonZeroU32;
 
-use crate::{Error, Monotonic, SubDateResolution, TimeResolution};
+use crate::{Error, FromMonotonic, Monotonic, SubDateResolution, TimeResolution};
 use alloc::{
     fmt, format, str,
     string::{String, ToString},
 };
-use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Timelike, Utc};
 
 const NUM_SECS: i64 = 60;
 
@@ -56,11 +56,10 @@ pub(crate) struct Minutes_ {
     pub(crate) length: u32,
 }
 
-impl<const N: u32> From<chrono::NaiveDateTime> for Minutes<N> {
-    fn from(d: chrono::NaiveDateTime) -> Self {
+impl<const N: u32> From<DateTime<Utc>> for Minutes<N> {
+    fn from(d: DateTime<Utc>) -> Self {
         Minutes {
-            index: d.and_utc().timestamp().div_euclid(60 * i64::from(N)),
-            // index: d.timestamp() / (60 * i64::from(N)),
+            index: d.timestamp().div_euclid(60 * i64::from(N)),
         }
     }
 }
@@ -69,7 +68,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
     type Err = crate::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if N == 1 {
-            let time = parse_naive_datetime(s)?;
+            let time = parse_datetime(s)?;
             if time.second() != 0 {
                 Err(crate::Error::ParseCustom {
                     ty_name: "Minutes",
@@ -91,7 +90,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
                 input: s.into(),
             })?;
 
-            let start = parse_naive_datetime(start)?;
+            let start = parse_datetime(start)?;
 
             if (start.hour() * 60 + start.minute()).rem_euclid(N) != 0 {
                 return Err(crate::Error::ParseCustom {
@@ -99,7 +98,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
                     input: format!("Invalid start for Minutes[Length:{}]: {}", N, start,),
                 });
             }
-            let end = parse_naive_datetime(end)?;
+            let end = parse_datetime(end)?;
 
             if start + Duration::minutes(i64::from(N)) != end {
                 return Err(crate::Error::ParseCustom {
@@ -117,7 +116,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
 }
 
 // TODO: make this more efficient
-fn format_naive_datetime(n: NaiveDateTime, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+fn format_datetime(n: DateTime<Utc>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
         f,
         "{}-{:02}-{:02} {:02}:{:02}",
@@ -129,7 +128,7 @@ fn format_naive_datetime(n: NaiveDateTime, f: &mut fmt::Formatter<'_>) -> fmt::R
     )
 }
 
-fn parse_naive_datetime(input: &str) -> Result<NaiveDateTime, Error> {
+fn parse_datetime(input: &str) -> Result<DateTime<Utc>, Error> {
     let year = input[0..=3]
         .parse()
         .map_err(|e| Error::ParseIntDetailed(e, input[0..=3].to_string()))?;
@@ -160,17 +159,17 @@ fn parse_naive_datetime(input: &str) -> Result<NaiveDateTime, Error> {
             format: "%Y/%m/%d %H:%M",
         })?;
 
-    Ok(date.and_time(time))
+    Ok(date.and_time(time).and_utc())
 }
 
 impl<const N: u32> fmt::Display for Minutes<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if N == 1 {
-            format_naive_datetime(self.start_datetime(), f)
+            format_datetime(self.start_datetime(), f)
         } else {
-            format_naive_datetime(self.start_datetime(), f)?;
+            format_datetime(self.start_datetime(), f)?;
             f.write_str(" => ")?;
-            format_naive_datetime(self.succ().start_datetime(), f)?;
+            format_datetime(self.succ().start_datetime(), f)?;
             Ok(())
         }
     }
@@ -187,10 +186,9 @@ impl<const N: u32> crate::TimeResolution for Minutes<N> {
             index: self.index - i64::from(n),
         }
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
+    fn start_datetime(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_timestamp(self.index * NUM_SECS * i64::from(N), 0)
             .expect("valid timestamp")
-            .naive_utc()
     }
     fn name(&self) -> String {
         format!("Minutes[Length:{}]", N)
@@ -201,11 +199,14 @@ impl<const N: u32> Monotonic for Minutes<N> {
     fn to_monotonic(&self) -> i64 {
         self.index
     }
-    fn from_monotonic(index: i64) -> Self {
-        Minutes { index }
-    }
     fn between(&self, other: Self) -> i64 {
         other.index - self.index
+    }
+}
+
+impl<const N: u32> FromMonotonic for Minutes<N> {
+    fn from_monotonic(index: i64) -> Self {
+        Minutes { index }
     }
 }
 
@@ -213,7 +214,7 @@ impl<const N: u32> Minutes<N> {}
 
 impl<const N: u32> SubDateResolution for Minutes<N> {
     fn occurs_on_date(&self) -> chrono::NaiveDate {
-        self.start_datetime().date()
+        self.start_datetime().date_naive()
     }
     fn first_on_day(day: chrono::NaiveDate) -> Self {
         Self::from_monotonic(

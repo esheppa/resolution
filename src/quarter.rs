@@ -4,7 +4,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, NaiveTime, Utc};
 use core::convert::TryFrom;
 #[cfg(feature = "serde")]
 use serde::de;
@@ -19,8 +19,8 @@ impl crate::TimeResolution for Quarter {
     fn pred_n(&self, n: u32) -> Self {
         Quarter(self.0 - i64::from(n))
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
-        self.start().and_hms_opt(0, 0, 0).expect("valid time")
+    fn start_datetime(&self) -> DateTime<Utc> {
+        self.start().and_time(NaiveTime::MIN).and_utc()
     }
 
     fn name(&self) -> String {
@@ -29,14 +29,17 @@ impl crate::TimeResolution for Quarter {
 }
 
 impl crate::Monotonic for Quarter {
-    fn from_monotonic(idx: i64) -> Self {
-        Quarter(idx)
-    }
     fn to_monotonic(&self) -> i64 {
         self.0
     }
     fn between(&self, other: Self) -> i64 {
         other.0 - self.0
+    }
+}
+
+impl crate::FromMonotonic for Quarter {
+    fn from_monotonic(idx: i64) -> Self {
+        Quarter(idx)
     }
 }
 
@@ -64,9 +67,9 @@ impl From<chrono::NaiveDate> for Quarter {
     }
 }
 
-impl From<chrono::NaiveDateTime> for Quarter {
-    fn from(d: chrono::NaiveDateTime) -> Self {
-        d.date().into()
+impl From<DateTime<Utc>> for Quarter {
+    fn from(d: DateTime<Utc>) -> Self {
+        d.date_naive().into()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{DateResolution, DateResolutionExt, SubDateResolution, TimeResolution};
+use crate::{DateResolution, DateResolutionExt, FromMonotonic, SubDateResolution, TimeResolution};
 use alloc::{collections, fmt, vec::Vec};
 use core::{mem, num};
 #[cfg(feature = "serde")]
@@ -40,7 +40,7 @@ impl<P: DateResolution> TimeRange<P> {
     }
 }
 
-impl<P: TimeResolution> TimeRange<P> {
+impl<P: TimeResolution + FromMonotonic> TimeRange<P> {
     pub fn from_map(map: collections::BTreeSet<i64>) -> Vec<TimeRange<P>> {
         let mut ranges = Vec::new();
         if map.is_empty() {
@@ -77,6 +77,9 @@ impl<P: TimeResolution> TimeRange<P> {
 
         ranges
     }
+}
+
+impl<P: TimeResolution> TimeRange<P> {
     pub fn to_indexes(&self) -> collections::BTreeSet<i64> {
         self.iter().map(|p| p.to_monotonic()).collect()
     }
