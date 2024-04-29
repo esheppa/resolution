@@ -1,5 +1,6 @@
 use crate::DateResolution;
 use crate::FromMonotonic;
+use crate::Minutes;
 use crate::Monotonic;
 use crate::SubDateResolution;
 use crate::TimeResolution;
@@ -132,9 +133,8 @@ where
     }
 }
 
-impl<R, Z> From<chrono::DateTime<Z>> for Zoned<R, Z>
+impl<const N: u32, Z> From<chrono::DateTime<Z>> for Zoned<Minutes<N>, Z>
 where
-    R: SubDateResolution,
     Z: TimeZone,
 {
     fn from(time: chrono::DateTime<Z>) -> Self {
