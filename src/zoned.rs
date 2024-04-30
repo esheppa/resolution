@@ -351,9 +351,11 @@ where
 mod tests {
     use crate::DateResolution;
     use crate::Day;
+    use crate::FixedTimeZone;
     use crate::Minutes;
     use crate::Zoned;
     use alloc::vec::Vec;
+    use chrono::Offset;
 
     #[test]
     fn test_subdate() {
@@ -368,13 +370,14 @@ mod tests {
             let start_timestamps = (0..((24 * 60 / N) * 365))
                 .map(|i| start + chrono::Duration::minutes((i * N).into()));
 
-            for start_timestamp in start_timestamps.take(2) {
+            for start_timestamp in start_timestamps {
                 assert_eq!(
                     start_timestamp,
                     Zoned::<Minutes<N>, _>::from(start_timestamp).local_start_datetime(),
-                )
+                );
             }
         }
+
         for tz in [
             chrono_tz::Australia::Sydney,
             chrono_tz::Australia::Adelaide,
@@ -389,11 +392,68 @@ mod tests {
             subdate::<30>(tz);
             subdate::<60>(tz);
 
-            // this is ... problematic ... with daylight savings
-            // zoned may not be possible for times larger than an hour and less than a day
-            subdate::<120>(tz);
-            subdate::<180>(tz);
-            subdate::<240>(tz);
+            // // this is ... problematic ... with daylight savings
+            // // zoned may not be possible for times larger than an hour and less than a day
+            // subdate::<120>(tz);
+            // subdate::<180>(tz);
+            // subdate::<240>(tz);
+        }
+
+        fn subdate_fixed<const N: u32, Z: FixedTimeZone>(tz: Z) {
+            let start = chrono::NaiveDate::from_ymd_opt(2022, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(tz)
+                .unwrap();
+
+            let start_timestamps = (0..((24 * 60 / N) * 365))
+                .map(|i| start.clone() + chrono::Duration::minutes((i * N).into()));
+
+            for start_timestamp in start_timestamps {
+                assert_eq!(
+                    start_timestamp.clone(),
+                    Zoned::<Minutes<N>, _>::from(start_timestamp.clone()).local_start_datetime(),
+                );
+
+                assert_eq!(
+                    Zoned::from_local(
+                        Zoned::<Minutes<N>, _>::from(start_timestamp.clone()).local_resolution(),
+                        tz
+                    ),
+                    Zoned::<Minutes<N>, _>::from(start_timestamp)
+                )
+            }
+        }
+
+        for tz in [
+            chrono::Utc.fix(),
+            chrono::FixedOffset::east_opt(60 * 60 * 3).unwrap(),
+            chrono::FixedOffset::west_opt(60 * 60 * 4).unwrap(),
+        ] {
+            subdate_fixed::<1, _>(tz);
+            subdate_fixed::<2, _>(tz);
+            subdate_fixed::<5, _>(tz);
+            subdate_fixed::<6, _>(tz);
+            subdate_fixed::<10, _>(tz);
+            subdate_fixed::<15, _>(tz);
+            subdate_fixed::<30, _>(tz);
+            subdate_fixed::<60, _>(tz);
+            subdate_fixed::<120, _>(tz);
+            subdate_fixed::<180, _>(tz);
+            subdate_fixed::<240, _>(tz);
+
+            subdate_fixed::<1, _>(chrono::Utc);
+            subdate_fixed::<2, _>(chrono::Utc);
+            subdate_fixed::<5, _>(chrono::Utc);
+            subdate_fixed::<6, _>(chrono::Utc);
+            subdate_fixed::<10, _>(chrono::Utc);
+            subdate_fixed::<15, _>(chrono::Utc);
+            subdate_fixed::<30, _>(chrono::Utc);
+            subdate_fixed::<60, _>(chrono::Utc);
+            subdate_fixed::<120, _>(chrono::Utc);
+            subdate_fixed::<180, _>(chrono::Utc);
+            subdate_fixed::<240, _>(chrono::Utc);
         }
     }
 
