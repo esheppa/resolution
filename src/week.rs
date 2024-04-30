@@ -104,7 +104,7 @@ impl<D: StartDay> TryFrom<Week_> for Week<D> {
     type Error = String;
     fn try_from(value: Week_) -> Result<Self, Self::Error> {
         if value.start_day == D::NAME {
-            Ok(Week::new(value.n))
+            Ok(Week::from_monotonic(value.n))
         } else {
             Err(format!(
                 "To create a Week<{}>, the start_day field should be {} but was instead {}",

@@ -408,7 +408,7 @@ mod tests {
         use crate::SubDateResolution;
 
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
-        let tm = dt.and_hms_opt(0, 0, 0).unwrap();
+        let tm = dt.and_time(NaiveTime::MIN).and_utc();
 
         let min = Minutes::<1>::from(tm);
         assert!(min.occurs_on_date() == dt);
