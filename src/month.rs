@@ -3,7 +3,7 @@ use alloc::{
     fmt, format, str,
     string::{String, ToString},
 };
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 use core::convert::TryFrom;
 #[cfg(feature = "serde")]
 use serde::de;
@@ -97,14 +97,14 @@ impl str::FromStr for Month {
 pub struct Month(i64); // number of months +- since 0AD
 
 impl crate::TimeResolution for Month {
-    fn succ_n(&self, n: u32) -> Self {
-        Month(self.0 + i64::from(n))
+    fn succ_n(&self, n: u64) -> Self {
+        Month(self.0 + i64::try_from(n).unwrap())
     }
-    fn pred_n(&self, n: u32) -> Self {
-        Month(self.0 - i64::from(n))
+    fn pred_n(&self, n: u64) -> Self {
+        Month(self.0 - i64::try_from(n).unwrap())
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
-        self.start().and_hms_opt(0, 0, 0).expect("valid datetime")
+    fn start_datetime(&self) -> DateTime<Utc> {
+        self.start().and_time(NaiveTime::MIN).and_utc()
     }
 
     fn name(&self) -> String {
@@ -116,11 +116,14 @@ impl crate::Monotonic for Month {
     fn to_monotonic(&self) -> i64 {
         self.0
     }
-    fn from_monotonic(idx: i64) -> Self {
-        Month(idx)
-    }
     fn between(&self, other: Self) -> i64 {
         other.0 - self.0
+    }
+}
+
+impl crate::FromMonotonic for Month {
+    fn from_monotonic(idx: i64) -> Self {
+        Month(idx)
     }
 }
 
@@ -130,17 +133,25 @@ impl crate::DateResolution for Month {
         let months = u32::try_from(1 + self.0.rem_euclid(12)).expect("valid datetime");
         chrono::NaiveDate::from_ymd_opt(years, months, 1).expect("valid datetime")
     }
-}
 
-impl From<chrono::NaiveDate> for Month {
-    fn from(d: chrono::NaiveDate) -> Self {
+    type Params = ();
+
+    fn params(&self) -> Self::Params {}
+
+    fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
         Month(i64::from(d.month0()) + i64::from(d.year()) * 12)
     }
 }
 
-impl From<chrono::NaiveDateTime> for Month {
-    fn from(d: chrono::NaiveDateTime) -> Self {
-        d.date().into()
+impl From<NaiveDate> for Month {
+    fn from(value: NaiveDate) -> Month {
+        Month::from_date(value, ())
+    }
+}
+
+impl From<DateTime<Utc>> for Month {
+    fn from(d: DateTime<Utc>) -> Self {
+        d.date_naive().into()
     }
 }
 
@@ -173,6 +184,14 @@ impl Month {
             12 => chrono::Month::December,
             _ => unreachable!(),
         }
+    }
+    pub fn new(date: NaiveDate) -> Self {
+        date.into()
+    }
+    pub fn from_parts(year: i32, month: chrono::Month) -> Self {
+        crate::FromMonotonic::from_monotonic(
+            i64::from(year) + (i64::from(month.number_from_month()) - 1),
+        )
     }
 }
 

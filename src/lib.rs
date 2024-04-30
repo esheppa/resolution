@@ -11,6 +11,7 @@ use core::{
 
 mod range;
 use alloc::{format, string::String};
+use chrono::{DateTime, NaiveDate, Utc};
 pub use range::{Cache, CacheResponse, TimeRange, TimeRangeComparison, TimeRangeIter};
 
 mod minutes;
@@ -35,15 +36,22 @@ mod year;
 pub use year::Year;
 
 mod zoned;
-pub use zoned::{TimeZone, Zoned};
+pub use zoned::Zoned;
 
-pub trait LongerThan<T> {}
+pub trait LongerThan<T>: LongerThanOrEqual<T> {}
 
 pub trait LongerThanOrEqual<T> {}
 
-pub trait ShorterThan<T> {}
+pub trait ShorterThan<T>: ShorterThanOrEqual<T> {}
+
+impl<Long, Short> ShorterThan<Long> for Short where
+    Long: LongerThanOrEqual<Short> + LongerThan<Short>
+{
+}
 
 pub trait ShorterThanOrEqual<T> {}
+
+impl<Long, Short> ShorterThanOrEqual<Long> for Short where Long: LongerThan<Short> {}
 
 // TODO: use macro for this
 
@@ -238,9 +246,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// occurring at regular times. Some examples are:
 /// * A cash-flow report aggregated to days or months
 /// * Dispatch periods in the Australian Electricity Market (and similar concepts in other energy markets)
-pub trait TimeResolution:
-    Send + Sync + Copy + Eq + Ord + From<chrono::NaiveDateTime> + Monotonic
-{
+pub trait TimeResolution: Copy + Eq + Ord + Monotonic {
     fn succ(&self) -> Self {
         self.succ_n(1)
     }
@@ -252,11 +258,11 @@ pub trait TimeResolution:
     // the default impls are probably inefficient
     // makes sense to require just the n
     // and give the 1 for free
-    fn succ_n(&self, n: u32) -> Self;
+    fn succ_n(&self, n: u64) -> Self;
 
-    fn pred_n(&self, n: u32) -> Self;
+    fn pred_n(&self, n: u64) -> Self;
 
-    fn start_datetime(&self) -> chrono::NaiveDateTime;
+    fn start_datetime(&self) -> DateTime<Utc>;
 
     fn name(&self) -> String;
 }
@@ -270,24 +276,39 @@ pub trait Monotonic {
     // we choose i64 rather than u64
     // as the behaviour on subtraction is nicer!
     fn to_monotonic(&self) -> i64;
-    fn from_monotonic(idx: i64) -> Self;
     fn between(&self, other: Self) -> i64;
+}
+
+pub trait FromMonotonic: Monotonic {
+    fn from_monotonic(idx: i64) -> Self;
 }
 
 /// `SubDateResolution` should only be implemented for periods of strictly less than one day in length
 pub trait SubDateResolution: TimeResolution {
+    type Params: Copy;
+
+    fn params(&self) -> Self::Params;
+
     fn occurs_on_date(&self) -> chrono::NaiveDate;
 
-    // the first of the resolutions units that occurs on the day
-    fn first_on_day(day: chrono::NaiveDate) -> Self;
+    fn from_utc_datetime(datetime: DateTime<Utc>, params: Self::Params) -> Self;
 
-    fn last_on_day(day: chrono::NaiveDate) -> Self {
-        Self::first_on_day(day + chrono::Duration::days(1)).pred()
+    // the first of the resolutions units that occurs on the day
+    fn first_on_day(day: chrono::NaiveDate, params: Self::Params) -> Self;
+
+    fn last_on_day(day: chrono::NaiveDate, params: Self::Params) -> Self {
+        Self::first_on_day(day + chrono::Duration::days(1), params).pred()
     }
 }
 
 /// `DateResolution` should only be implemented for periods of one or more days in length
-pub trait DateResolution: TimeResolution + From<chrono::NaiveDate> {
+pub trait DateResolution: TimeResolution {
+    type Params;
+
+    fn params(&self) -> Self::Params;
+
+    fn from_date(date: NaiveDate, params: Self::Params) -> Self;
+
     fn start(&self) -> chrono::NaiveDate;
 }
 
@@ -310,34 +331,26 @@ pub trait DateResolutionExt: DateResolution {
         (self.end() - self.start()).num_days() + 1
     }
 
-    fn to_sub_date_resolution<R: SubDateResolution>(&self) -> range::TimeRange<R> {
-        range::TimeRange::from_start_end(R::first_on_day(self.start()), R::last_on_day(self.end()))
-            .expect("Will always have at least one within the day")
+    fn to_sub_date_resolution<R>(&self) -> range::TimeRange<R>
+    where
+        R: SubDateResolution<Params = Self::Params>,
+    {
+        range::TimeRange::from_bounds(
+            R::first_on_day(self.start(), self.params()),
+            R::last_on_day(self.end(), self.params()),
+        )
     }
 
-    fn rescale<R: DateResolution>(&self) -> range::TimeRange<R> {
-        range::TimeRange::from_start_end(self.start().into(), self.end().into())
-            .expect("Will always have at least one day")
+    fn rescale<Out>(&self) -> range::TimeRange<Out>
+    where
+        Out: DateResolution<Params = Self::Params>,
+        Self: LongerThan<Out>,
+    {
+        range::TimeRange::from_bounds(
+            Out::from_date(self.start(), self.params()),
+            Out::from_date(self.end(), self.params()),
+        )
     }
-
-    // fn days(&self) -> collections::BTreeSet<chrono::NaiveDate> {
-    //     (0..)
-    //         .map(|n| self.start() + chrono::Duration::days(n))
-    //         .filter(|d| d <= &self.end())
-    //         .collect()
-    // }
-    // fn business_days(
-    //     &self,
-    //     weekend: collections::HashSet<chrono::Weekday>,
-    //     holidays: collections::BTreeSet<chrono::NaiveDate>,
-    // ) -> collections::BTreeSet<chrono::NaiveDate> {
-    //     let base_days = (0..)
-    //         .map(|n| self.start() + chrono::Duration::days(n))
-    //         .filter(|d| d <= &self.end())
-    //         .filter(|d| !weekend.contains(&d.weekday()))
-    //         .collect::<collections::BTreeSet<_>>();
-    //     base_days.difference(&holidays).copied().collect()
-    // }
 }
 
 impl<T> DateResolutionExt for T where T: DateResolution {}

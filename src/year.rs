@@ -1,6 +1,6 @@
 use crate::{month, DateResolution, DateResolutionExt};
 use alloc::string::{String, ToString};
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 use core::{convert::TryFrom, fmt, str};
 
 #[derive(Clone, Copy, Debug, Eq, PartialOrd, PartialEq, Ord, Hash)]
@@ -12,17 +12,30 @@ impl crate::DateResolution for Year {
     fn start(&self) -> chrono::NaiveDate {
         chrono::NaiveDate::from_ymd_opt(self.year_num(), 1, 1).expect("valid time")
     }
+    type Params = ();
+
+    fn params(&self) -> Self::Params {}
+
+    fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
+        Year(i64::from(d.year()))
+    }
+}
+
+impl From<NaiveDate> for Year {
+    fn from(value: NaiveDate) -> Year {
+        Year::from_date(value, ())
+    }
 }
 
 impl crate::TimeResolution for Year {
-    fn succ_n(&self, n: u32) -> Year {
-        Year(self.0 + i64::from(n))
+    fn succ_n(&self, n: u64) -> Year {
+        Year(self.0 + i64::try_from(n).unwrap())
     }
-    fn pred_n(&self, n: u32) -> Year {
-        Year(self.0 - i64::from(n))
+    fn pred_n(&self, n: u64) -> Year {
+        Year(self.0 - i64::try_from(n).unwrap())
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
-        self.start().and_hms_opt(0, 0, 0).expect("valid time")
+    fn start_datetime(&self) -> DateTime<Utc> {
+        self.start().and_time(NaiveTime::MIN).and_utc()
     }
 
     fn name(&self) -> String {
@@ -31,9 +44,6 @@ impl crate::TimeResolution for Year {
 }
 
 impl crate::Monotonic for Year {
-    fn from_monotonic(idx: i64) -> Self {
-        Year(idx)
-    }
     fn to_monotonic(&self) -> i64 {
         self.0
     }
@@ -42,15 +52,15 @@ impl crate::Monotonic for Year {
     }
 }
 
-impl From<chrono::NaiveDate> for Year {
-    fn from(d: chrono::NaiveDate) -> Self {
-        Year(i64::from(d.year()))
+impl crate::FromMonotonic for Year {
+    fn from_monotonic(idx: i64) -> Self {
+        Year(idx)
     }
 }
 
-impl From<chrono::NaiveDateTime> for Year {
-    fn from(d: chrono::NaiveDateTime) -> Self {
-        d.date().into()
+impl From<DateTime<Utc>> for Year {
+    fn from(d: DateTime<Utc>) -> Self {
+        d.date_naive().into()
     }
 }
 

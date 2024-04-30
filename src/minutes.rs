@@ -1,12 +1,12 @@
 use core::fmt::Debug;
-use core::num::NonZeroU32;
+use core::num::NonZeroU64;
 
-use crate::{Error, Monotonic, SubDateResolution, TimeResolution};
+use crate::{Error, FromMonotonic, Monotonic, SubDateResolution, TimeResolution};
 use alloc::{
     fmt, format, str,
     string::{String, ToString},
 };
-use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Timelike, Utc};
 
 const NUM_SECS: i64 = 60;
 
@@ -56,11 +56,10 @@ pub(crate) struct Minutes_ {
     pub(crate) length: u32,
 }
 
-impl<const N: u32> From<chrono::NaiveDateTime> for Minutes<N> {
-    fn from(d: chrono::NaiveDateTime) -> Self {
+impl<const N: u32> From<DateTime<Utc>> for Minutes<N> {
+    fn from(d: DateTime<Utc>) -> Self {
         Minutes {
-            index: d.and_utc().timestamp().div_euclid(60 * i64::from(N)),
-            // index: d.timestamp() / (60 * i64::from(N)),
+            index: d.timestamp().div_euclid(60 * i64::from(N)),
         }
     }
 }
@@ -69,7 +68,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
     type Err = crate::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if N == 1 {
-            let time = parse_naive_datetime(s)?;
+            let time = parse_datetime(s)?;
             if time.second() != 0 {
                 Err(crate::Error::ParseCustom {
                     ty_name: "Minutes",
@@ -91,7 +90,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
                 input: s.into(),
             })?;
 
-            let start = parse_naive_datetime(start)?;
+            let start = parse_datetime(start)?;
 
             if (start.hour() * 60 + start.minute()).rem_euclid(N) != 0 {
                 return Err(crate::Error::ParseCustom {
@@ -99,7 +98,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
                     input: format!("Invalid start for Minutes[Length:{}]: {}", N, start,),
                 });
             }
-            let end = parse_naive_datetime(end)?;
+            let end = parse_datetime(end)?;
 
             if start + Duration::minutes(i64::from(N)) != end {
                 return Err(crate::Error::ParseCustom {
@@ -117,7 +116,7 @@ impl<const N: u32> str::FromStr for Minutes<N> {
 }
 
 // TODO: make this more efficient
-fn format_naive_datetime(n: NaiveDateTime, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+fn format_datetime(n: DateTime<Utc>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
         f,
         "{}-{:02}-{:02} {:02}:{:02}",
@@ -129,7 +128,7 @@ fn format_naive_datetime(n: NaiveDateTime, f: &mut fmt::Formatter<'_>) -> fmt::R
     )
 }
 
-fn parse_naive_datetime(input: &str) -> Result<NaiveDateTime, Error> {
+fn parse_datetime(input: &str) -> Result<DateTime<Utc>, Error> {
     let year = input[0..=3]
         .parse()
         .map_err(|e| Error::ParseIntDetailed(e, input[0..=3].to_string()))?;
@@ -160,37 +159,36 @@ fn parse_naive_datetime(input: &str) -> Result<NaiveDateTime, Error> {
             format: "%Y/%m/%d %H:%M",
         })?;
 
-    Ok(date.and_time(time))
+    Ok(date.and_time(time).and_utc())
 }
 
 impl<const N: u32> fmt::Display for Minutes<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if N == 1 {
-            format_naive_datetime(self.start_datetime(), f)
+            format_datetime(self.start_datetime(), f)
         } else {
-            format_naive_datetime(self.start_datetime(), f)?;
+            format_datetime(self.start_datetime(), f)?;
             f.write_str(" => ")?;
-            format_naive_datetime(self.succ().start_datetime(), f)?;
+            format_datetime(self.succ().start_datetime(), f)?;
             Ok(())
         }
     }
 }
 
 impl<const N: u32> crate::TimeResolution for Minutes<N> {
-    fn succ_n(&self, n: u32) -> Minutes<N> {
+    fn succ_n(&self, n: u64) -> Minutes<N> {
         Minutes {
-            index: self.index + i64::from(n),
+            index: self.index + i64::try_from(n).unwrap(),
         }
     }
-    fn pred_n(&self, n: u32) -> Minutes<N> {
+    fn pred_n(&self, n: u64) -> Minutes<N> {
         Minutes {
-            index: self.index - i64::from(n),
+            index: self.index - i64::try_from(n).unwrap(),
         }
     }
-    fn start_datetime(&self) -> chrono::NaiveDateTime {
+    fn start_datetime(&self) -> DateTime<Utc> {
         DateTime::<Utc>::from_timestamp(self.index * NUM_SECS * i64::from(N), 0)
             .expect("valid timestamp")
-            .naive_utc()
     }
     fn name(&self) -> String {
         format!("Minutes[Length:{}]", N)
@@ -201,11 +199,14 @@ impl<const N: u32> Monotonic for Minutes<N> {
     fn to_monotonic(&self) -> i64 {
         self.index
     }
-    fn from_monotonic(index: i64) -> Self {
-        Minutes { index }
-    }
     fn between(&self, other: Self) -> i64 {
         other.index - self.index
+    }
+}
+
+impl<const N: u32> FromMonotonic for Minutes<N> {
+    fn from_monotonic(index: i64) -> Self {
+        Minutes { index }
     }
 }
 
@@ -213,9 +214,9 @@ impl<const N: u32> Minutes<N> {}
 
 impl<const N: u32> SubDateResolution for Minutes<N> {
     fn occurs_on_date(&self) -> chrono::NaiveDate {
-        self.start_datetime().date()
+        self.start_datetime().date_naive()
     }
-    fn first_on_day(day: chrono::NaiveDate) -> Self {
+    fn first_on_day(day: chrono::NaiveDate, _params: Self::Params) -> Self {
         Self::from_monotonic(
             day.and_hms_opt(0, 0, 0)
                 .expect("valid time")
@@ -224,6 +225,14 @@ impl<const N: u32> SubDateResolution for Minutes<N> {
                 / (i64::from(N) * NUM_SECS),
         )
     }
+
+    type Params = ();
+
+    fn params(&self) -> Self::Params {}
+
+    fn from_utc_datetime(datetime: DateTime<Utc>, _params: Self::Params) -> Self {
+        datetime.into()
+    }
 }
 
 macro_rules! minutes_impl {
@@ -231,7 +240,7 @@ macro_rules! minutes_impl {
         impl Minutes<$i> {
             pub fn relative(&self) -> DaySubdivison<$i> {
                 DaySubdivison {
-                    index: Minutes::<$i>::first_on_day(self.occurs_on_date()).between(*self),
+                    index: Minutes::<$i>::first_on_day(self.occurs_on_date(), ()).between(*self),
                 }
             }
         }
@@ -256,20 +265,20 @@ macro_rules! day_subdivision_impl {
             pub const PERIODS: u32 = 1440 / $i;
             pub fn on_date(&self, date: NaiveDate) -> Minutes<$i> {
                 Minutes::<$i>::from_monotonic(
-                    self.index + Minutes::<$i>::first_on_day(date).to_monotonic(),
+                    self.index + Minutes::<$i>::first_on_day(date, ()).to_monotonic(),
                 )
             }
-            pub fn new(period_no: NonZeroU32) -> Option<DaySubdivison<$i>> {
-                if i64::from(period_no.get()) > i64::from(Self::PERIODS) {
+            pub fn new(period_no: NonZeroU64) -> Option<DaySubdivison<$i>> {
+                if i64::try_from(period_no.get()).ok()? > i64::from(Self::PERIODS) {
                     return None;
                 }
 
                 Some(DaySubdivison {
-                    index: i64::from(period_no.get()) - 1,
+                    index: i64::try_from(period_no.get()).ok()? - 1,
                 })
             }
-            pub fn index(&self) -> NonZeroU32 {
-                NonZeroU32::new(u32::try_from(self.index).unwrap() + 1).unwrap()
+            pub fn index(&self) -> NonZeroU64 {
+                NonZeroU64::new(u64::try_from(self.index).unwrap() + 1).unwrap()
             }
         }
     };
@@ -326,7 +335,7 @@ mod tests {
         for i in 0..1440 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<1>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<1>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 1440).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -338,7 +347,7 @@ mod tests {
         for i in 0..720 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<2>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<2>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 720).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -350,7 +359,7 @@ mod tests {
         for i in 0..288 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<5>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<5>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 288).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -362,7 +371,7 @@ mod tests {
         for i in 0..48 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<30>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<30>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 48).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -374,7 +383,7 @@ mod tests {
         for i in 0..24 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<60>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<60>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 24).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -386,7 +395,7 @@ mod tests {
         for i in 0..12 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<120>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<120>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 12).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -399,7 +408,7 @@ mod tests {
         use crate::SubDateResolution;
 
         let dt = chrono::NaiveDate::from_ymd_opt(2021, 12, 6).unwrap();
-        let tm = dt.and_hms_opt(0, 0, 0).unwrap();
+        let tm = dt.and_time(NaiveTime::MIN).and_utc();
 
         let min = Minutes::<1>::from(tm);
         assert!(min.occurs_on_date() == dt);
@@ -435,12 +444,14 @@ mod tests {
                     .unwrap()
                     .and_hms_opt(10, 2, 0)
                     .unwrap()
+                    .and_utc()
             ),
             Minutes::<2>::from(
                 chrono::NaiveDate::from_ymd_opt(2021, 1, 1)
                     .unwrap()
                     .and_hms_opt(10, 3, 59)
                     .unwrap()
+                    .and_utc()
             ),
         );
     }
@@ -461,6 +472,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 5, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
         assert_eq!(
@@ -469,6 +481,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 6, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
         assert_eq!(
@@ -481,6 +494,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 5, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
 
@@ -492,6 +506,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 2, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
 
@@ -503,6 +518,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 0, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
     }
