@@ -164,7 +164,7 @@ where
 {
     type Params = Z;
     fn params(&self) -> Self::Params {
-        self.zone().clone()
+        self.zone()
     }
     fn occurs_on_date(&self) -> chrono::NaiveDate {
         todo!()
@@ -195,7 +195,7 @@ where
 {
     type Params = Z;
     fn params(&self) -> Self::Params {
-        self.zone().clone()
+        self.zone()
     }
     fn start(&self) -> chrono::NaiveDate {
         self.local_resolution.start()
@@ -272,11 +272,7 @@ where
     Z: TimeZone + Copy + fmt::Debug,
 {
     fn clone(&self) -> Self {
-        Self {
-            local_resolution: self.local_resolution.clone(),
-            current_offset: self.current_offset.clone(),
-            zone: self.zone.clone(),
-        }
+        *self
     }
 }
 

@@ -287,7 +287,7 @@ impl<K: Ord + fmt::Debug + Copy, T: Send + fmt::Debug + Eq + Copy> Cache<K, T> {
                     .iter()
                     // mustn't be empty othewise we would have returned out of the first arm of the `if`
                     .filter(|(k, _)| request.iter().next().unwrap() <= *k)
-                    .filter(|(k, _)| request.iter().rev().next().unwrap() >= *k)
+                    .filter(|(k, _)| request.iter().next_back().unwrap() >= *k)
                     .map(|(k, v)| (*k, *v))
                     .collect(),
             )
