@@ -18,8 +18,14 @@ impl crate::DateResolution for Year {
         ()
     }
 
-    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
-        date.into()
+    fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
+        Year(i64::from(d.year()))
+    }
+}
+
+impl From<NaiveDate> for Year {
+    fn from(value: NaiveDate) -> Year {
+        Year::from_date(value, ())
     }
 }
 
@@ -51,12 +57,6 @@ impl crate::Monotonic for Year {
 impl crate::FromMonotonic for Year {
     fn from_monotonic(idx: i64) -> Self {
         Year(idx)
-    }
-}
-
-impl From<chrono::NaiveDate> for Year {
-    fn from(d: chrono::NaiveDate) -> Self {
-        Year(i64::from(d.year()))
     }
 }
 

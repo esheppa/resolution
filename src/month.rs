@@ -140,14 +140,14 @@ impl crate::DateResolution for Month {
         ()
     }
 
-    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
-        date.into()
+    fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
+        Month(i64::from(d.month0()) + i64::from(d.year()) * 12)
     }
 }
 
-impl From<chrono::NaiveDate> for Month {
-    fn from(d: chrono::NaiveDate) -> Self {
-        Month(i64::from(d.month0()) + i64::from(d.year()) * 12)
+impl From<NaiveDate> for Month {
+    fn from(value: NaiveDate) -> Month {
+        Month::from_date(value, ())
     }
 }
 

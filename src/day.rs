@@ -66,19 +66,19 @@ impl crate::DateResolution for Day {
     }
 
     fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
-        date.into()
-    }
-}
-
-impl From<chrono::NaiveDate> for Day {
-    fn from(d: chrono::NaiveDate) -> Day {
-        Day((d - base()).num_days())
+        Day((date - base()).num_days())
     }
 }
 
 impl From<DateTime<Utc>> for Day {
     fn from(d: DateTime<Utc>) -> Self {
         d.date_naive().into()
+    }
+}
+
+impl From<NaiveDate> for Day {
+    fn from(value: NaiveDate) -> Day {
+        Day::from_date(value, ())
     }
 }
 

@@ -56,8 +56,13 @@ impl crate::DateResolution for Quarter {
         ()
     }
 
-    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
-        date.into()
+    fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
+        Quarter(quarter_num(d) - 1 + i64::from(d.year()) * 4)
+    }
+}
+impl From<NaiveDate> for Quarter {
+    fn from(value: NaiveDate) -> Quarter {
+        Quarter::from_date(value, ())
     }
 }
 
@@ -68,18 +73,6 @@ fn quarter_num(d: chrono::NaiveDate) -> i64 {
         7..=9 => 3,
         10..=12 => 4,
         mn => panic!("Unexpected month number {}", mn),
-    }
-}
-
-impl From<chrono::NaiveDate> for Quarter {
-    fn from(d: chrono::NaiveDate) -> Self {
-        Quarter(quarter_num(d) - 1 + i64::from(d.year()) * 4)
-    }
-}
-
-impl From<DateTime<Utc>> for Quarter {
-    fn from(d: DateTime<Utc>) -> Self {
-        d.date_naive().into()
     }
 }
 
