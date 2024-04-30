@@ -84,6 +84,25 @@ where
 
 impl<R, Z> Zoned<R, Z>
 where
+    R: SubDateResolution<Params = ()>,
+    Z: FixedTimeZone,
+{
+    pub fn from_local(value: R, zone: Z) -> Self {
+        value
+            .start_datetime()
+            .naive_utc()
+            .and_local_timezone(zone)
+            .single()
+            // unwrap will never panic becuase calling
+            // `and_local_timezone` with a FixedTimeZone will
+            // always reuturn a valid local time
+            .unwrap()
+            .into()
+    }
+}
+
+impl<R, Z> Zoned<R, Z>
+where
     R: TimeResolution,
     Z: TimeZone + Copy + fmt::Debug,
 {
