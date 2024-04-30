@@ -15,7 +15,7 @@ pub struct TimeRange<P: TimeResolution> {
         serde(bound(deserialize = "P: de::DeserializeOwned"))
     )]
     start: P,
-    len: num::NonZeroU32,
+    len: num::NonZeroU64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,14 +29,16 @@ pub enum TimeRangeComparison {
 impl<P: SubDateResolution> TimeRange<P> {}
 
 impl<P: DateResolution> TimeRange<P> {
-    pub fn to_sub_date_resolution<S: SubDateResolution>(&self) -> TimeRange<S> {
+    pub fn to_sub_date_resolution<S>(&self) -> TimeRange<S>
+    where
+        S: SubDateResolution<Params = P::Params>,
+    {
         // get first start
-        let first_start = S::first_on_day(self.start.start());
+        let first_start = S::first_on_day(self.start.start(), self.start.params());
         // get last end
-        let last_end = S::last_on_day(self.end().end());
+        let last_end = S::last_on_day(self.end().end(), self.end().params());
         // do from_start_end and expect it
-        TimeRange::from_start_end(first_start, last_end)
-            .expect("Original range is contigious so new will also be contigious")
+        TimeRange::from_bounds(first_start, last_end)
     }
 }
 
@@ -55,16 +57,16 @@ impl<P: TimeResolution + FromMonotonic> TimeRange<P> {
         };
         let mut current_range = TimeRange {
             start: P::from_monotonic(prev),
-            len: num::NonZeroU32::new(1).unwrap(),
+            len: num::NonZeroU64::new(1).unwrap(),
         };
         for val in iter {
             if val == prev + 1 {
                 current_range.len =
-                    num::NonZeroU32::new(current_range.len.get().saturating_add(1)).unwrap();
+                    num::NonZeroU64::new(current_range.len.get().saturating_add(1)).unwrap();
             } else {
                 let mut old_range = TimeRange {
                     start: P::from_monotonic(val),
-                    len: num::NonZeroU32::new(1).unwrap(),
+                    len: num::NonZeroU64::new(1).unwrap(),
                 };
                 mem::swap(&mut current_range, &mut old_range);
                 if !ranges.contains(&old_range) {
@@ -84,13 +86,26 @@ impl<P: TimeResolution> TimeRange<P> {
         self.iter().map(|p| p.to_monotonic()).collect()
     }
 
-    pub fn maybe_new(start: P, len: u32) -> Option<TimeRange<P>> {
+    pub fn from_set(set: &collections::BTreeSet<P>) -> Option<TimeRange<P>> {
+        if u32::try_from(set.len()).is_err() {
+            return None;
+        }
+        if set.is_empty() {
+            return None;
+        }
         Some(TimeRange {
-            start,
-            len: num::NonZeroU32::new(len)?,
+            start: set.iter().next().copied()?,
+            len: num::NonZeroU64::new(u64::try_from(set.len()).ok()?)?,
         })
     }
-    pub fn new(start: P, len: num::NonZeroU32) -> TimeRange<P> {
+
+    pub fn maybe_new(start: P, len: u64) -> Option<TimeRange<P>> {
+        Some(TimeRange {
+            start,
+            len: num::NonZeroU64::new(len)?,
+        })
+    }
+    pub fn new(start: P, len: num::NonZeroU64) -> TimeRange<P> {
         TimeRange { start, len }
     }
     pub fn index_of(&self, point: P) -> Option<usize> {
@@ -103,62 +118,65 @@ impl<P: TimeResolution> TimeRange<P> {
             )
         }
     }
-    pub fn from_start_end(start: P, end: P) -> Option<TimeRange<P>> {
-        if start <= end {
-            Some(TimeRange {
-                start,
-                len: num::NonZeroU32::new(1 + u32::try_from(start.between(end)).ok()?).unwrap(),
-            })
+    pub fn from_bounds(a: P, b: P) -> TimeRange<P> {
+        if a <= b {
+            TimeRange {
+                start: a,
+                len: num::NonZeroU64::new(1 + u64::try_from(a.between(b)).unwrap()).unwrap(),
+            }
         } else {
-            None
+            TimeRange {
+                start: a,
+                len: num::NonZeroU64::new(1 + u64::try_from(b.between(a)).unwrap()).unwrap(),
+            }
         }
     }
 
-    pub fn len(&self) -> num::NonZeroU32 {
+    pub fn len(&self) -> num::NonZeroU64 {
         self.len
     }
 
-    pub fn intersect(&self, other: &TimeRange<P>) -> Option<TimeRange<P>> {
+    pub fn intersection(&self, other: &TimeRange<P>) -> Option<TimeRange<P>> {
         let max_start = self.start().max(other.start());
         let min_end = self.end().min(other.end());
-        TimeRange::from_start_end(max_start, min_end)
+
+        if max_start <= min_end {
+            Some(TimeRange::from_bounds(max_start, min_end))
+        } else {
+            None
+        }
     }
-    pub fn merge(&self, other: &TimeRange<P>) -> Option<TimeRange<P>> {
-        if self.intersect(other).is_some() {
+    pub fn union(&self, other: &TimeRange<P>) -> Option<TimeRange<P>> {
+        if self.intersection(other).is_some() {
             let min_start = self.start().min(other.start());
             let max_end = self.end().max(other.end());
-            TimeRange::from_start_end(min_start, max_end)
+            Some(TimeRange::from_bounds(min_start, max_end))
         } else {
             None
         }
     }
 
-    pub fn subtract(&self, other: &TimeRange<P>) -> (Option<TimeRange<P>>, Option<TimeRange<P>>) {
-        (
-            TimeRange::from_start_end(self.start(), other.start().pred().min(self.end())),
-            TimeRange::from_start_end(other.end().succ().max(self.start()), self.end()),
-        )
-    }
-    pub fn compare(&self, other: &TimeRange<P>) -> TimeRangeComparison {
-        match self.subtract(other) {
-            (Some(_), Some(_)) => TimeRangeComparison::Superset,
-            (Some(_), None) => TimeRangeComparison::Earlier,
-            (None, Some(_)) => TimeRangeComparison::Later,
-            (None, None) => TimeRangeComparison::Subset,
-        }
-    }
-    pub fn from_set(set: &collections::BTreeSet<P>) -> Option<TimeRange<P>> {
-        if u32::try_from(set.len()).is_err() {
-            return None;
-        }
-        if set.is_empty() {
-            return None;
-        }
-        Some(TimeRange {
-            start: set.iter().next().copied()?,
-            len: num::NonZeroU32::new(u32::try_from(set.len()).ok()?)?,
-        })
-    }
+    // pub fn subtract(&self, other: &TimeRange<P>) -> (Option<TimeRange<P>>, Option<TimeRange<P>>) {
+    //     (
+    //         {
+
+    //             Some(TimeRange::from_bounds(self.start(), other.start().pred().min(self.end())))
+    //         },
+    //         {
+    //             Some(TimeRange::from_bounds(other.end().succ().max(self.start()), self.end()))
+    //         },
+    //     )
+    // }
+
+    // pub fn compare(&self, other: &TimeRange<P>) -> TimeRangeComparison {
+    //     match self.subtract(other) {
+    //         (Some(_), Some(_)) => TimeRangeComparison::Superset,
+    //         (Some(_), None) => TimeRangeComparison::Earlier,
+    //         (None, Some(_)) => TimeRangeComparison::Later,
+    //         (None, None) => TimeRangeComparison::Subset,
+    //     }
+    // }
+
     pub fn start(&self) -> P {
         self.start
     }

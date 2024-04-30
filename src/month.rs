@@ -3,7 +3,7 @@ use alloc::{
     fmt, format, str,
     string::{String, ToString},
 };
-use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 use core::convert::TryFrom;
 #[cfg(feature = "serde")]
 use serde::de;
@@ -97,11 +97,11 @@ impl str::FromStr for Month {
 pub struct Month(i64); // number of months +- since 0AD
 
 impl crate::TimeResolution for Month {
-    fn succ_n(&self, n: u32) -> Self {
-        Month(self.0 + i64::from(n))
+    fn succ_n(&self, n: u64) -> Self {
+        Month(self.0 + i64::try_from(n).unwrap())
     }
-    fn pred_n(&self, n: u32) -> Self {
-        Month(self.0 - i64::from(n))
+    fn pred_n(&self, n: u64) -> Self {
+        Month(self.0 - i64::try_from(n).unwrap())
     }
     fn start_datetime(&self) -> DateTime<Utc> {
         self.start().and_time(NaiveTime::MIN).and_utc()
@@ -132,6 +132,16 @@ impl crate::DateResolution for Month {
         let years = i32::try_from(self.0.div_euclid(12)).expect("Not pre/post historic");
         let months = u32::try_from(1 + self.0.rem_euclid(12)).expect("valid datetime");
         chrono::NaiveDate::from_ymd_opt(years, months, 1).expect("valid datetime")
+    }
+
+    type Params = ();
+
+    fn params(&self) -> Self::Params {
+        ()
+    }
+
+    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
+        date.into()
     }
 }
 
@@ -176,6 +186,14 @@ impl Month {
             12 => chrono::Month::December,
             _ => unreachable!(),
         }
+    }
+    pub fn new(date: NaiveDate) -> Self {
+        date.into()
+    }
+    pub fn from_parts(year: i32, month: chrono::Month) -> Self {
+        crate::FromMonotonic::from_monotonic(
+            i64::from(year) + (i64::from(month.number_from_month()) - 1),
+        )
     }
 }
 

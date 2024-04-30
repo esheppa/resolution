@@ -3,7 +3,7 @@ use alloc::{
     fmt, str,
     string::{String, ToString},
 };
-use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 #[cfg(feature = "serde")]
 use serde::de;
 
@@ -58,6 +58,16 @@ impl crate::DateResolution for Day {
     fn start(&self) -> chrono::NaiveDate {
         base() + chrono::Duration::days(self.0)
     }
+
+    type Params = ();
+
+    fn params(&self) -> Self::Params {
+        ()
+    }
+
+    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
+        date.into()
+    }
 }
 
 impl From<chrono::NaiveDate> for Day {
@@ -73,11 +83,11 @@ impl From<DateTime<Utc>> for Day {
 }
 
 impl crate::TimeResolution for Day {
-    fn succ_n(&self, n: u32) -> Day {
-        Day(self.0 + i64::from(n))
+    fn succ_n(&self, n: u64) -> Day {
+        Day(self.0 + i64::try_from(n).unwrap())
     }
-    fn pred_n(&self, n: u32) -> Day {
-        Day(self.0 - i64::from(n))
+    fn pred_n(&self, n: u64) -> Day {
+        Day(self.0 - i64::try_from(n).unwrap())
     }
     fn start_datetime(&self) -> DateTime<Utc> {
         self.start().and_time(NaiveTime::MIN).and_utc()
@@ -120,6 +130,9 @@ impl Day {
     }
     pub fn month_num(&self) -> u32 {
         self.start().month()
+    }
+    pub fn new(date: NaiveDate) -> Self {
+        date.into()
     }
 }
 

@@ -4,7 +4,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 use core::convert::TryFrom;
 #[cfg(feature = "serde")]
 use serde::de;
@@ -13,11 +13,11 @@ use serde::de;
 pub struct Quarter(i64);
 
 impl crate::TimeResolution for Quarter {
-    fn succ_n(&self, n: u32) -> Self {
-        Quarter(self.0 + i64::from(n))
+    fn succ_n(&self, n: u64) -> Self {
+        Quarter(self.0 + i64::try_from(n).unwrap())
     }
-    fn pred_n(&self, n: u32) -> Self {
-        Quarter(self.0 - i64::from(n))
+    fn pred_n(&self, n: u64) -> Self {
+        Quarter(self.0 - i64::try_from(n).unwrap())
     }
     fn start_datetime(&self) -> DateTime<Utc> {
         self.start().and_time(NaiveTime::MIN).and_utc()
@@ -48,6 +48,16 @@ impl crate::DateResolution for Quarter {
         let years = i32::try_from(self.0.div_euclid(4)).expect("Not pre/post historic");
         let qtr = self.quarter_num();
         chrono::NaiveDate::from_ymd_opt(years, qtr * 3 - 2, 1).expect("valid time")
+    }
+
+    type Params = ();
+
+    fn params(&self) -> Self::Params {
+        ()
+    }
+
+    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
+        date.into()
     }
 }
 
@@ -88,6 +98,30 @@ impl Quarter {
     }
     pub fn quarter_num(&self) -> u32 {
         u32::try_from(1 + self.0.rem_euclid(4)).expect("Range of 1-4")
+    }
+    pub fn new(date: NaiveDate) -> Self {
+        date.into()
+    }
+    pub fn from_parts(year: i32, quarter: QuarterNumber) -> Self {
+        crate::FromMonotonic::from_monotonic(i64::from(year) + quarter.offset())
+    }
+}
+
+pub enum QuarterNumber {
+    Q1,
+    Q2,
+    Q3,
+    Q4,
+}
+
+impl QuarterNumber {
+    fn offset(&self) -> i64 {
+        match self {
+            QuarterNumber::Q1 => 0,
+            QuarterNumber::Q2 => 1,
+            QuarterNumber::Q3 => 2,
+            QuarterNumber::Q4 => 3,
+        }
     }
 }
 

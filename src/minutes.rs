@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use core::num::NonZeroU32;
+use core::num::NonZeroU64;
 
 use crate::{Error, FromMonotonic, Monotonic, SubDateResolution, TimeResolution};
 use alloc::{
@@ -176,14 +176,14 @@ impl<const N: u32> fmt::Display for Minutes<N> {
 }
 
 impl<const N: u32> crate::TimeResolution for Minutes<N> {
-    fn succ_n(&self, n: u32) -> Minutes<N> {
+    fn succ_n(&self, n: u64) -> Minutes<N> {
         Minutes {
-            index: self.index + i64::from(n),
+            index: self.index + i64::try_from(n).unwrap(),
         }
     }
-    fn pred_n(&self, n: u32) -> Minutes<N> {
+    fn pred_n(&self, n: u64) -> Minutes<N> {
         Minutes {
-            index: self.index - i64::from(n),
+            index: self.index - i64::try_from(n).unwrap(),
         }
     }
     fn start_datetime(&self) -> DateTime<Utc> {
@@ -216,7 +216,7 @@ impl<const N: u32> SubDateResolution for Minutes<N> {
     fn occurs_on_date(&self) -> chrono::NaiveDate {
         self.start_datetime().date_naive()
     }
-    fn first_on_day(day: chrono::NaiveDate) -> Self {
+    fn first_on_day(day: chrono::NaiveDate, _params: Self::Params) -> Self {
         Self::from_monotonic(
             day.and_hms_opt(0, 0, 0)
                 .expect("valid time")
@@ -225,6 +225,16 @@ impl<const N: u32> SubDateResolution for Minutes<N> {
                 / (i64::from(N) * NUM_SECS),
         )
     }
+
+    type Params = ();
+
+    fn params(&self) -> Self::Params {
+        ()
+    }
+
+    fn from_utc_datetime(datetime: DateTime<Utc>, _params: Self::Params) -> Self {
+        datetime.into()
+    }
 }
 
 macro_rules! minutes_impl {
@@ -232,7 +242,7 @@ macro_rules! minutes_impl {
         impl Minutes<$i> {
             pub fn relative(&self) -> DaySubdivison<$i> {
                 DaySubdivison {
-                    index: Minutes::<$i>::first_on_day(self.occurs_on_date()).between(*self),
+                    index: Minutes::<$i>::first_on_day(self.occurs_on_date(), ()).between(*self),
                 }
             }
         }
@@ -257,20 +267,20 @@ macro_rules! day_subdivision_impl {
             pub const PERIODS: u32 = 1440 / $i;
             pub fn on_date(&self, date: NaiveDate) -> Minutes<$i> {
                 Minutes::<$i>::from_monotonic(
-                    self.index + Minutes::<$i>::first_on_day(date).to_monotonic(),
+                    self.index + Minutes::<$i>::first_on_day(date, ()).to_monotonic(),
                 )
             }
-            pub fn new(period_no: NonZeroU32) -> Option<DaySubdivison<$i>> {
-                if i64::from(period_no.get()) > i64::from(Self::PERIODS) {
+            pub fn new(period_no: NonZeroU64) -> Option<DaySubdivison<$i>> {
+                if i64::try_from(period_no.get()).ok()? > i64::from(Self::PERIODS) {
                     return None;
                 }
 
                 Some(DaySubdivison {
-                    index: i64::from(period_no.get()) - 1,
+                    index: i64::try_from(period_no.get()).ok()? - 1,
                 })
             }
-            pub fn index(&self) -> NonZeroU32 {
-                NonZeroU32::new(u32::try_from(self.index).unwrap() + 1).unwrap()
+            pub fn index(&self) -> NonZeroU64 {
+                NonZeroU64::new(u64::try_from(self.index).unwrap() + 1).unwrap()
             }
         }
     };
@@ -327,7 +337,7 @@ mod tests {
         for i in 0..1440 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<1>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<1>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 1440).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -339,7 +349,7 @@ mod tests {
         for i in 0..720 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<2>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<2>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 720).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -351,7 +361,7 @@ mod tests {
         for i in 0..288 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<5>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<5>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 288).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -363,7 +373,7 @@ mod tests {
         for i in 0..48 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<30>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<30>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 48).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -375,7 +385,7 @@ mod tests {
         for i in 0..24 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<60>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<60>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 24).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -387,7 +397,7 @@ mod tests {
         for i in 0..12 {
             assert_eq!(
                 base.succ_n(i).relative(),
-                DaySubdivison::<120>::new(NonZeroU32::new(i + 1).unwrap()).unwrap()
+                DaySubdivison::<120>::new(NonZeroU64::new(i + 1).unwrap()).unwrap()
             );
             assert_eq!(base.succ_n(i * 12).relative().index().get(), 1);
             assert_eq!(base.succ_n(i).relative().index().get(), i + 1,);
@@ -436,12 +446,14 @@ mod tests {
                     .unwrap()
                     .and_hms_opt(10, 2, 0)
                     .unwrap()
+                    .and_utc()
             ),
             Minutes::<2>::from(
                 chrono::NaiveDate::from_ymd_opt(2021, 1, 1)
                     .unwrap()
                     .and_hms_opt(10, 3, 59)
                     .unwrap()
+                    .and_utc()
             ),
         );
     }
@@ -462,6 +474,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 5, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
         assert_eq!(
@@ -470,6 +483,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 6, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
         assert_eq!(
@@ -482,6 +496,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 5, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
 
@@ -493,6 +508,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 2, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
 
@@ -504,6 +520,7 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(10, 0, 0)
                 .unwrap()
+                .and_utc()
                 .into(),
         );
     }

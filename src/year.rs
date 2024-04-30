@@ -1,6 +1,6 @@
 use crate::{month, DateResolution, DateResolutionExt};
 use alloc::string::{String, ToString};
-use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 use core::{convert::TryFrom, fmt, str};
 
 #[derive(Clone, Copy, Debug, Eq, PartialOrd, PartialEq, Ord, Hash)]
@@ -12,14 +12,23 @@ impl crate::DateResolution for Year {
     fn start(&self) -> chrono::NaiveDate {
         chrono::NaiveDate::from_ymd_opt(self.year_num(), 1, 1).expect("valid time")
     }
+    type Params = ();
+
+    fn params(&self) -> Self::Params {
+        ()
+    }
+
+    fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
+        date.into()
+    }
 }
 
 impl crate::TimeResolution for Year {
-    fn succ_n(&self, n: u32) -> Year {
-        Year(self.0 + i64::from(n))
+    fn succ_n(&self, n: u64) -> Year {
+        Year(self.0 + i64::try_from(n).unwrap())
     }
-    fn pred_n(&self, n: u32) -> Year {
-        Year(self.0 - i64::from(n))
+    fn pred_n(&self, n: u64) -> Year {
+        Year(self.0 - i64::try_from(n).unwrap())
     }
     fn start_datetime(&self) -> DateTime<Utc> {
         self.start().and_time(NaiveTime::MIN).and_utc()
