@@ -36,7 +36,7 @@ mod year;
 pub use year::Year;
 
 mod zoned;
-pub use zoned::Zoned;
+pub use zoned::{Zoned, FixedTimeZone};
 
 pub trait LongerThan<T>: LongerThanOrEqual<T> {}
 
