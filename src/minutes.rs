@@ -228,9 +228,7 @@ impl<const N: u32> SubDateResolution for Minutes<N> {
 
     type Params = ();
 
-    fn params(&self) -> Self::Params {
-        ()
-    }
+    fn params(&self) -> Self::Params {}
 
     fn from_utc_datetime(datetime: DateTime<Utc>, _params: Self::Params) -> Self {
         datetime.into()

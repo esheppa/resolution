@@ -187,9 +187,7 @@ impl<D: StartDay> DateResolution for Week<D> {
     }
     type Params = ();
 
-    fn params(&self) -> Self::Params {
-        ()
-    }
+    fn params(&self) -> Self::Params {}
 
     fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
         let week_num = (date - base(D::weekday())).num_days() / 7;

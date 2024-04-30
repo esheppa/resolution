@@ -136,9 +136,7 @@ impl crate::DateResolution for Month {
 
     type Params = ();
 
-    fn params(&self) -> Self::Params {
-        ()
-    }
+    fn params(&self) -> Self::Params {}
 
     fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
         Month(i64::from(d.month0()) + i64::from(d.year()) * 12)

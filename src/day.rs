@@ -61,9 +61,7 @@ impl crate::DateResolution for Day {
 
     type Params = ();
 
-    fn params(&self) -> Self::Params {
-        ()
-    }
+    fn params(&self) -> Self::Params {}
 
     fn from_date(date: NaiveDate, _params: Self::Params) -> Self {
         Day((date - base()).num_days())

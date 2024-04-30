@@ -52,9 +52,7 @@ impl crate::DateResolution for Quarter {
 
     type Params = ();
 
-    fn params(&self) -> Self::Params {
-        ()
-    }
+    fn params(&self) -> Self::Params {}
 
     fn from_date(d: NaiveDate, _params: Self::Params) -> Self {
         Quarter(quarter_num(d) - 1 + i64::from(d.year()) * 4)
