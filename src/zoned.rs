@@ -17,10 +17,15 @@ use chrono::TimeZone;
 use chrono::Utc;
 use core::fmt;
 
-pub trait FixedTimeZone: TimeZone + Copy + fmt::Debug {}
+pub trait FixedTimeZone: TimeZone + Copy + fmt::Debug {
+    fn new() -> Self;
+}
 
-impl FixedTimeZone for Utc {}
-impl FixedTimeZone for FixedOffset {}
+impl FixedTimeZone for Utc {
+    fn new() -> Self {
+        Utc
+    }
+}
 
 /// `Zoned` stores a `TimeResolution` representing the local time in the zone, plus the relevant
 /// offset and zone itself. This is intended to allow assertion that a given resolution is in a certain
@@ -45,6 +50,42 @@ where
     // store the offset of the local_resolution so that we can reconstruct the local time infallibly
     current_offset: FixedOffset,
     zone: Z,
+}
+
+#[cfg(feature = "serde")]
+impl<'de, R, Z> serde::de::Deserialize<'de> for Zoned<R, Z>
+where
+    R: SubDateResolution<Params = ()>,
+    Z: FixedTimeZone,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Zoned<R, Z>, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let local = chrono::NaiveDateTime::deserialize(deserializer)?;
+
+        // unwrap here is fine because by the rules of `FixedTimeZone`
+        // this operation must not fail
+        let zoned = local.and_local_timezone(Z::new()).unwrap();
+
+        Ok(zoned.into())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, R, Z> serde::Serialize for Zoned<R, Z>
+where
+    R: SubDateResolution<Params = ()>,
+    Z: FixedTimeZone,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.local_start_datetime()
+            .naive_local()
+            .serialize(serializer)
+    }
 }
 
 impl<R, Z> TimeResolution for Zoned<R, Z>
@@ -355,7 +396,7 @@ mod tests {
     use crate::Minutes;
     use crate::Zoned;
     use alloc::vec::Vec;
-    use chrono::Offset;
+    use chrono::FixedOffset;
 
     #[test]
     fn test_subdate() {
@@ -421,40 +462,79 @@ mod tests {
                         Zoned::<Minutes<N>, _>::from(start_timestamp.clone()).local_resolution(),
                         tz
                     ),
+                    Zoned::<Minutes<N>, _>::from(start_timestamp.clone())
+                );
+
+                #[cfg(feature = "serde")]
+                assert_eq!(
+                    serde_json::from_str::<Zoned::<Minutes<N>, _>>(
+                        &serde_json::to_string(&Zoned::<Minutes<N>, _>::from(
+                            start_timestamp.clone()
+                        ))
+                        .unwrap()
+                    )
+                    .unwrap(),
                     Zoned::<Minutes<N>, _>::from(start_timestamp)
-                )
+                );
             }
         }
 
-        for tz in [
-            chrono::Utc.fix(),
-            chrono::FixedOffset::east_opt(60 * 60 * 3).unwrap(),
-            chrono::FixedOffset::west_opt(60 * 60 * 4).unwrap(),
-        ] {
-            subdate_fixed::<1, _>(tz);
-            subdate_fixed::<2, _>(tz);
-            subdate_fixed::<5, _>(tz);
-            subdate_fixed::<6, _>(tz);
-            subdate_fixed::<10, _>(tz);
-            subdate_fixed::<15, _>(tz);
-            subdate_fixed::<30, _>(tz);
-            subdate_fixed::<60, _>(tz);
-            subdate_fixed::<120, _>(tz);
-            subdate_fixed::<180, _>(tz);
-            subdate_fixed::<240, _>(tz);
+        #[derive(Debug, Clone, Copy)]
+        struct FixedEast<const N: i32>;
 
-            subdate_fixed::<1, _>(chrono::Utc);
-            subdate_fixed::<2, _>(chrono::Utc);
-            subdate_fixed::<5, _>(chrono::Utc);
-            subdate_fixed::<6, _>(chrono::Utc);
-            subdate_fixed::<10, _>(chrono::Utc);
-            subdate_fixed::<15, _>(chrono::Utc);
-            subdate_fixed::<30, _>(chrono::Utc);
-            subdate_fixed::<60, _>(chrono::Utc);
-            subdate_fixed::<120, _>(chrono::Utc);
-            subdate_fixed::<180, _>(chrono::Utc);
-            subdate_fixed::<240, _>(chrono::Utc);
+        impl<const N: i32> chrono::TimeZone for FixedEast<N> {
+            type Offset = FixedOffset;
+
+            fn from_offset(_: &Self::Offset) -> Self {
+                Self
+            }
+
+            fn offset_from_local_date(
+                &self,
+                _: &chrono::prelude::NaiveDate,
+            ) -> chrono::MappedLocalTime<Self::Offset> {
+                unimplemented!()
+            }
+
+            fn offset_from_local_datetime(
+                &self,
+                _: &chrono::prelude::NaiveDateTime,
+            ) -> chrono::MappedLocalTime<Self::Offset> {
+                chrono::MappedLocalTime::Single(chrono::FixedOffset::east_opt(N).unwrap())
+            }
+
+            fn offset_from_utc_date(&self, _: &chrono::prelude::NaiveDate) -> Self::Offset {
+                unimplemented!()
+            }
+
+            fn offset_from_utc_datetime(&self, _: &chrono::prelude::NaiveDateTime) -> Self::Offset {
+                chrono::FixedOffset::east_opt(N).unwrap()
+            }
         }
+
+        impl<const N: i32> FixedTimeZone for FixedEast<N> {
+            fn new() -> Self {
+                FixedEast
+            }
+        }
+
+        fn test_for_zone<F: FixedTimeZone>() {
+            subdate_fixed::<1, _>(F::new());
+            subdate_fixed::<2, _>(F::new());
+            subdate_fixed::<5, _>(F::new());
+            subdate_fixed::<6, _>(F::new());
+            subdate_fixed::<10, _>(F::new());
+            subdate_fixed::<15, _>(F::new());
+            subdate_fixed::<30, _>(F::new());
+            subdate_fixed::<60, _>(F::new());
+            subdate_fixed::<120, _>(F::new());
+            subdate_fixed::<180, _>(F::new());
+            subdate_fixed::<240, _>(F::new());
+        }
+
+        test_for_zone::<chrono::Utc>();
+        test_for_zone::<FixedEast<{ 60 * 60 * 3 }>>();
+        test_for_zone::<FixedEast<{ 60 * 60 * -4 }>>();
     }
 
     #[test]
