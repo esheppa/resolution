@@ -68,15 +68,18 @@ impl crate::DateResolution for Day {
     }
 }
 
-impl From<DateTime<Utc>> for Day {
-    fn from(d: DateTime<Utc>) -> Self {
-        d.date_naive().into()
-    }
-}
+// impl From<DateTime<Utc>> for Day {
+//     fn from(d: DateTime<Utc>) -> Self {
+//         d.date_naive().into()
+//     }
+// }
 
-impl From<NaiveDate> for Day {
-    fn from(value: NaiveDate) -> Day {
-        Day::from_date(value, ())
+impl<D: Datelike> From<D> for Day {
+    fn from(value: D) -> Day {
+        Day::from_date(
+            chrono::NaiveDate::from_ymd_opt(value.year(), value.month(), value.day()).unwrap(),
+            (),
+        )
     }
 }
 
