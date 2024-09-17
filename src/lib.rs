@@ -330,6 +330,26 @@ pub trait TimeResolution: Copy + Eq + Ord + Monotonic {
     {
         Out::from(self.start_datetime())
     }
+
+    // handy functions.... to avoid turbofishing when it's a pain
+    fn five_minute(&self) -> FiveMinute {
+        self.convert()
+    }
+    fn half_hour(&self) -> HalfHour {
+        self.convert()
+    }
+    fn hour(&self) -> Hour {
+        self.convert()
+    }
+    fn day(&self) -> Day {
+        self.convert()
+    }
+    fn month(&self) -> Month {
+        self.convert()
+    }
+    fn year(&self) -> Year {
+        self.convert()
+    }
 }
 
 /// `Monotonic` is used to enable multiple different resolutions to be stored together
