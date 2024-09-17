@@ -227,7 +227,7 @@ where
         self.zone()
     }
     fn occurs_on_date(&self) -> chrono::NaiveDate {
-        todo!()
+        self.local_start_datetime().date_naive()
     }
 
     fn first_on_day(day: chrono::NaiveDate, params: Self::Params) -> Self {

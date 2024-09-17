@@ -1,4 +1,7 @@
-use crate::{DateResolution, DateResolutionExt, FromMonotonic, SubDateResolution, TimeResolution};
+use crate::{
+    DateResolution, DateResolutionExt, FromMonotonic, LongerThanOrEqual, SubDateResolution,
+    TimeResolution,
+};
 use alloc::{collections, fmt, vec::Vec};
 use core::{mem, num};
 #[cfg(feature = "serde")]
@@ -183,8 +186,19 @@ impl<P: TimeResolution> TimeRange<P> {
     pub fn end(&self) -> P {
         self.start.succ_n(self.len.get() - 1)
     }
-    pub fn contains(&self, rhs: P) -> bool {
-        rhs >= self.start && rhs <= self.end()
+    pub fn contains<O>(&self, rhs: O) -> bool
+    where
+        O: TimeResolution,
+        P: LongerThanOrEqual<O>,
+    {
+        let range_start = self.start.start_datetime();
+        let range_end = self.end().succ().start_datetime();
+
+        let comparison_start = rhs.start_datetime();
+        let comparison_end = rhs.succ().start_datetime();
+
+        (range_start..range_end).contains(&comparison_start)
+            && (range_start..range_end).contains(&comparison_end)
     }
     pub fn set(&self) -> collections::BTreeSet<P> {
         self.iter().collect()
@@ -250,27 +264,6 @@ fn missing_pieces<K: Ord + fmt::Debug + Copy>(
     to_request
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_missing_pieces() {
-        let pieces = missing_pieces(
-            collections::BTreeSet::from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-            &collections::BTreeSet::from([2, 3, 7, 8]),
-        );
-        assert_eq!(
-            pieces,
-            Vec::from([
-                collections::BTreeSet::from([1]),
-                collections::BTreeSet::from([4, 5, 6]),
-                collections::BTreeSet::from([9, 10]),
-            ])
-        )
-    }
-}
-
 // No concept of partial, becuse we will simply request the missing data, then ask the cache again.
 pub enum CacheResponse<K: Ord + fmt::Debug + Copy, T: Send + fmt::Debug + Eq + Copy> {
     Hit(collections::BTreeMap<K, T>), // means the whole request as able to be replied, doesn't necessarily mean the whole range of data is filled
@@ -317,5 +310,53 @@ impl<K: Ord + fmt::Debug + Copy, T: Send + fmt::Debug + Eq + Copy> Cache<K, T> {
             // this function would need to be fallible
             self.data.insert(point, datum);
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+
+    use crate::{Day, Minutes, Month, Year};
+
+    use super::*;
+
+    #[test]
+    fn test_missing_pieces() {
+        let pieces = missing_pieces(
+            collections::BTreeSet::from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            &collections::BTreeSet::from([2, 3, 7, 8]),
+        );
+        assert_eq!(
+            pieces,
+            Vec::from([
+                collections::BTreeSet::from([1]),
+                collections::BTreeSet::from([4, 5, 6]),
+                collections::BTreeSet::from([9, 10]),
+            ])
+        )
+    }
+    #[test]
+    fn test_contains() {
+        let mth = Month::from_parts(2024, chrono::Month::January);
+
+        let day_range = mth.rescale::<Day>();
+
+        assert!(day_range.contains(Minutes::<5>::from_utc_datetime(
+            NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(15, 15, 0).unwrap(),
+            )
+            .and_utc(),
+            ()
+        )));
+
+        let year = Year::new(2024);
+
+        let month_range = year.rescale::<Month>();
+
+        assert!(month_range.contains(mth))
+
+
+
     }
 }

@@ -61,6 +61,7 @@ impl LongerThanOrEqual<Minute> for HalfHour {}
 impl LongerThanOrEqual<Minute> for Hour {}
 impl LongerThanOrEqual<Minute> for Day {}
 impl<D> LongerThanOrEqual<Minute> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<Minute> for Month {}
 impl LongerThanOrEqual<Minute> for Quarter {}
 impl LongerThanOrEqual<Minute> for Year {}
 
@@ -69,6 +70,7 @@ impl LongerThan<Minute> for HalfHour {}
 impl LongerThan<Minute> for Hour {}
 impl LongerThan<Minute> for Day {}
 impl<D> LongerThan<Minute> for Week<D> where D: StartDay {}
+impl LongerThan<Minute> for Month {}
 impl LongerThan<Minute> for Quarter {}
 impl LongerThan<Minute> for Year {}
 
@@ -77,6 +79,7 @@ impl LongerThanOrEqual<FiveMinute> for HalfHour {}
 impl LongerThanOrEqual<FiveMinute> for Hour {}
 impl LongerThanOrEqual<FiveMinute> for Day {}
 impl<D> LongerThanOrEqual<FiveMinute> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<FiveMinute> for Month {}
 impl LongerThanOrEqual<FiveMinute> for Quarter {}
 impl LongerThanOrEqual<FiveMinute> for Year {}
 
@@ -84,6 +87,7 @@ impl LongerThan<FiveMinute> for HalfHour {}
 impl LongerThan<FiveMinute> for Hour {}
 impl LongerThan<FiveMinute> for Day {}
 impl<D> LongerThan<FiveMinute> for Week<D> where D: StartDay {}
+impl LongerThan<FiveMinute> for Month {}
 impl LongerThan<FiveMinute> for Quarter {}
 impl LongerThan<FiveMinute> for Year {}
 
@@ -91,14 +95,64 @@ impl LongerThanOrEqual<HalfHour> for HalfHour {}
 impl LongerThanOrEqual<HalfHour> for Hour {}
 impl LongerThanOrEqual<HalfHour> for Day {}
 impl<D> LongerThanOrEqual<HalfHour> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<HalfHour> for Month {}
 impl LongerThanOrEqual<HalfHour> for Quarter {}
 impl LongerThanOrEqual<HalfHour> for Year {}
 
 impl LongerThan<HalfHour> for Hour {}
 impl LongerThan<HalfHour> for Day {}
 impl<D> LongerThan<HalfHour> for Week<D> where D: StartDay {}
+impl LongerThan<HalfHour> for Month {}
 impl LongerThan<HalfHour> for Quarter {}
 impl LongerThan<HalfHour> for Year {}
+
+impl LongerThanOrEqual<Hour> for Hour {}
+impl LongerThanOrEqual<Hour> for Day {}
+impl<D> LongerThanOrEqual<Hour> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<Hour> for Month {}
+impl LongerThanOrEqual<Hour> for Quarter {}
+impl LongerThanOrEqual<Hour> for Year {}
+
+impl LongerThan<Hour> for Day {}
+impl<D> LongerThan<Hour> for Week<D> where D: StartDay {}
+impl LongerThan<Hour> for Month {}
+impl LongerThan<Hour> for Quarter {}
+impl LongerThan<Hour> for Year {}
+
+impl LongerThanOrEqual<Day> for Day {}
+impl<D> LongerThanOrEqual<Day> for Week<D> where D: StartDay {}
+impl LongerThanOrEqual<Day> for Month {}
+impl LongerThanOrEqual<Day> for Quarter {}
+impl LongerThanOrEqual<Day> for Year {}
+
+impl<D> LongerThan<Day> for Week<D> where D: StartDay {}
+impl LongerThan<Day> for Month {}
+impl LongerThan<Day> for Quarter {}
+impl LongerThan<Day> for Year {}
+
+impl<D0, D> LongerThanOrEqual<Week<D0>> for Week<D> where D: StartDay, D0: StartDay {}
+impl<D0> LongerThanOrEqual<Week<D0>> for Quarter where D0: StartDay{}
+impl<D0> LongerThanOrEqual<Week<D0>> for Month where D0: StartDay{}
+impl<D0> LongerThanOrEqual<Week<D0>> for Year where D0: StartDay {}
+
+impl<D0> LongerThan<Week<D0>> for Month where D0: StartDay {}
+impl<D0> LongerThan<Week<D0>> for Quarter where D0: StartDay {}
+impl<D0> LongerThan<Week<D0>> for Year  where D0: StartDay {}
+
+impl LongerThanOrEqual<Month> for Month {}
+impl LongerThanOrEqual<Month> for Quarter {}
+impl LongerThanOrEqual<Month> for Year {}
+
+impl LongerThan<Month> for Quarter {}
+impl LongerThan<Month> for Year {}
+
+impl LongerThanOrEqual<Quarter> for Quarter {}
+impl LongerThanOrEqual<Quarter> for Year {}
+
+impl LongerThan<Quarter> for Year {}
+
+impl LongerThanOrEqual<Year> for Year {}
+
 
 /// This function is useful for formatting types implementing `Monotonic` when they are stored
 /// in their `i64` form instead of their `TimeResolution` form. Provided you have the `TypeId` handy
@@ -265,7 +319,13 @@ pub trait TimeResolution: Copy + Eq + Ord + Monotonic {
     fn start_datetime(&self) -> DateTime<Utc>;
 
     fn name(&self) -> String;
+
+    fn convert<Out>(&self) -> Out 
+    where Out: TimeResolution + From<DateTime<Utc>> {
+        Out::from(self.start_datetime())
+    }
 }
+
 
 /// `Monotonic` is used to enable multiple different resolutions to be stored together
 ///
