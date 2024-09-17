@@ -188,10 +188,8 @@ impl Month {
     pub fn new(date: NaiveDate) -> Self {
         date.into()
     }
-    pub fn from_parts(year: i32, month: chrono::Month) -> Self {
-        crate::FromMonotonic::from_monotonic(
-            i64::from(year) + (i64::from(month.number_from_month()) - 1),
-        )
+    pub fn from_parts(year: i32, month: chrono::Month) -> Option<Self> {
+        NaiveDate::from_ymd_opt(year, month.number_from_month(), 1).map(Into::into)
     }
 }
 

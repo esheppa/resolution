@@ -130,14 +130,19 @@ impl LongerThan<Day> for Month {}
 impl LongerThan<Day> for Quarter {}
 impl LongerThan<Day> for Year {}
 
-impl<D0, D> LongerThanOrEqual<Week<D0>> for Week<D> where D: StartDay, D0: StartDay {}
-impl<D0> LongerThanOrEqual<Week<D0>> for Quarter where D0: StartDay{}
-impl<D0> LongerThanOrEqual<Week<D0>> for Month where D0: StartDay{}
+impl<D0, D> LongerThanOrEqual<Week<D0>> for Week<D>
+where
+    D: StartDay,
+    D0: StartDay,
+{
+}
+impl<D0> LongerThanOrEqual<Week<D0>> for Quarter where D0: StartDay {}
+impl<D0> LongerThanOrEqual<Week<D0>> for Month where D0: StartDay {}
 impl<D0> LongerThanOrEqual<Week<D0>> for Year where D0: StartDay {}
 
 impl<D0> LongerThan<Week<D0>> for Month where D0: StartDay {}
 impl<D0> LongerThan<Week<D0>> for Quarter where D0: StartDay {}
-impl<D0> LongerThan<Week<D0>> for Year  where D0: StartDay {}
+impl<D0> LongerThan<Week<D0>> for Year where D0: StartDay {}
 
 impl LongerThanOrEqual<Month> for Month {}
 impl LongerThanOrEqual<Month> for Quarter {}
@@ -152,7 +157,6 @@ impl LongerThanOrEqual<Quarter> for Year {}
 impl LongerThan<Quarter> for Year {}
 
 impl LongerThanOrEqual<Year> for Year {}
-
 
 /// This function is useful for formatting types implementing `Monotonic` when they are stored
 /// in their `i64` form instead of their `TimeResolution` form. Provided you have the `TypeId` handy
@@ -320,12 +324,13 @@ pub trait TimeResolution: Copy + Eq + Ord + Monotonic {
 
     fn name(&self) -> String;
 
-    fn convert<Out>(&self) -> Out 
-    where Out: TimeResolution + From<DateTime<Utc>> {
+    fn convert<Out>(&self) -> Out
+    where
+        Out: TimeResolution + From<DateTime<Utc>>,
+    {
         Out::from(self.start_datetime())
     }
 }
-
 
 /// `Monotonic` is used to enable multiple different resolutions to be stored together
 ///

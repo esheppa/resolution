@@ -1,8 +1,9 @@
 use crate::{
-    DateResolution, DateResolutionExt, FromMonotonic, LongerThanOrEqual, SubDateResolution,
-    TimeResolution,
+    DateResolution, DateResolutionExt, FixedTimeZone, FromMonotonic, LongerThanOrEqual,
+    SubDateResolution, TimeResolution, Zoned,
 };
 use alloc::{collections, fmt, vec::Vec};
+use chrono::{DateTime, Utc};
 use core::{mem, num};
 #[cfg(feature = "serde")]
 use serde::de;
@@ -191,11 +192,16 @@ impl<P: TimeResolution> TimeRange<P> {
         O: TimeResolution,
         P: LongerThanOrEqual<O>,
     {
+        extern crate std;
+        use std::dbg;
+
         let range_start = self.start.start_datetime();
         let range_end = self.end().succ().start_datetime();
 
         let comparison_start = rhs.start_datetime();
         let comparison_end = rhs.succ().start_datetime();
+
+        dbg!(range_start, range_end, comparison_start, comparison_end);
 
         (range_start..range_end).contains(&comparison_start)
             && (range_start..range_end).contains(&comparison_end)
@@ -208,6 +214,20 @@ impl<P: TimeResolution> TimeRange<P> {
             current: self.start(),
             end: self.end(),
         }
+    }
+
+    pub fn rescale<Out>(&self) -> TimeRange<Out>
+    where
+        Out: TimeResolution + From<DateTime<Utc>>,
+    {
+        // get the exact start
+        let start = Out::from(self.start().start_datetime());
+
+        // for the end, we can't use something like 23:59:59
+        // so we instead get the next period then look back.
+        let end = Out::from(self.end().succ().start_datetime()).pred();
+
+        TimeRange::from_bounds(start, end)
     }
 }
 
@@ -226,6 +246,12 @@ impl<P: TimeResolution> Iterator for TimeRangeIter<P> {
         } else {
             None
         }
+    }
+}
+
+impl<P: TimeResolution, Z: FixedTimeZone> TimeRange<Zoned<P, Z>> {
+    pub fn local(&self) -> TimeRange<P> {
+        TimeRange::new(self.start().local_resolution(), self.len)
     }
 }
 
@@ -314,9 +340,10 @@ impl<K: Ord + fmt::Debug + Copy, T: Send + fmt::Debug + Eq + Copy> Cache<K, T> {
 }
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
-    use crate::{Day, Minutes, Month, Year};
+    use crate::{Day, FiveMinute, Hour, Minutes, Month, Year};
 
     use super::*;
 
@@ -337,9 +364,18 @@ mod tests {
     }
     #[test]
     fn test_contains() {
-        let mth = Month::from_parts(2024, chrono::Month::January);
+        extern crate std;
+        use std::dbg;
+
+        let mth = Month::from_parts(2024, chrono::Month::January).unwrap();
 
         let day_range = mth.rescale::<Day>();
+
+        dbg!(
+            mth.to_string(),
+            day_range.start.start(),
+            day_range.end().start()
+        );
 
         assert!(day_range.contains(Minutes::<5>::from_utc_datetime(
             NaiveDateTime::new(
@@ -355,8 +391,33 @@ mod tests {
         let month_range = year.rescale::<Month>();
 
         assert!(month_range.contains(mth))
+    }
 
+    #[test]
+    fn test_rescale() {
+        let start = Year::new(2024);
+        let year = TimeRange::from_bounds(start, start);
 
+        let fiveminute = year.rescale::<FiveMinute>();
+        assert_eq!(fiveminute.len().get(), 366 * 288);
+        assert_eq!(fiveminute.rescale::<Year>(), year);
 
+        let hours = year.rescale::<Hour>();
+        assert_eq!(hours.len().get(), 366 * 24);
+        assert_eq!(hours.rescale::<Year>(), year);
+        assert_eq!(fiveminute.rescale::<Hour>(), hours);
+
+        let days = year.rescale::<Day>();
+        assert_eq!(days.len().get(), 366);
+        assert_eq!(days.rescale::<Year>(), year);
+        assert_eq!(fiveminute.rescale::<Day>(), days);
+        assert_eq!(hours.rescale::<Day>(), days);
+
+        let months = year.rescale::<Month>();
+        assert_eq!(months.len().get(), 12);
+        assert_eq!(months.rescale::<Year>(), year);
+        assert_eq!(fiveminute.rescale::<Month>(), months);
+        assert_eq!(hours.rescale::<Month>(), months);
+        assert_eq!(days.rescale::<Month>(), months);
     }
 }
